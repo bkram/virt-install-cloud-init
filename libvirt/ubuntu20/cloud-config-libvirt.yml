@@ -1,0 +1,30 @@
+#cloud-config
+fqdn: ubuntu20-cloud.ttl
+preserv_hostname: false
+timezone: Europe/Amsterdam
+package_upgrade: true
+package_update: true
+packages:
+  - openssh-server
+  - sudo
+  - qemu-guest-agent
+runcmd:
+  - echo UsePAM yes >> /etc/ssh/sshd_config
+  - [systemctl, enable, sshd]
+  - [systemctl, start, sshd]
+  # - dhclient -r
+  # - dhclient
+users:
+  - name: mrk
+    gecos: Mark de Bruijn
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    groups: sudo
+    lock_passwd: False
+    passwd: $6$rounds=4096$kijTapZ7M$9YOOmc8C97ynpgt8DSgDV3MpqnN7W1/TxbV9ti.M.DZRo80HdBTK02yIceU10Dm1DuUrIZvVzeTOlKGJjGCBm/
+    ssh-authorized-keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC84EEOv6h2iq2gHlWkgsD3XWGKV6CMrGq0Mj3uiDjl2f8nkdy+SHJCdgAmToN7NwOlByrcEWslNnLzoivyUVJ0c98TcGUsnnmGi0dd3wpLHJltgDdFADnRlscOyM8VBDqeytphOV+0iwzI3Ig9gZyk6pP0iMsCoNWxK6iHfds1L648wFC3p5VWiS96jQ5CDjg5259+M5tI3DCGj/RpcJhfd6J5Mps9UQYPJeb+544z6uRbSm2Vs1WIUOM4S6HnhZGmZRv+csJrXEGJNlbancoSe4aLC7wSZBFO/kkHALQ24xc/Z8eDi9eOQpnPDWo1jf1nYYikzA/MBQWQ7ivdIJF7
+power_state:
+  mode: reboot
+  timeout: 30
+  condition: True
