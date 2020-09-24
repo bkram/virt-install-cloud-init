@@ -1,11 +1,10 @@
 #!/bin/bash
-# rm focal-server-cloudimg-amd64-disk-kvm.img 
-# wget https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64-disk-kvm.img
+wget https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64-disk-kvm.img -O ubuntu-source.img
 
 virsh destroy --domain ubuntu20-cloud
 virsh undefine --domain ubuntu20-cloud --remove-all-storage
 
-cp focal-server-cloudimg-amd64-disk-kvm.img ubuntu20.img
+cp ubuntu-source.img ubuntu20.img
 qemu-img resize ubuntu20.img +32G
 
 sudo cloud-localds -v cloud-init.iso cloud-config-libvirt.yml #--network-config network.yml

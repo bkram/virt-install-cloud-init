@@ -1,10 +1,10 @@
 #!/bin/bash
-# wget "https://cloud.centos.org/centos/8/x86_64/images/CentOS-8-GenericCloud-8.2.2004-20200611.2.x86_64.qcow2"
+wget https://cloud.centos.org/centos/8/x86_64/images/CentOS-8-GenericCloud-8.2.2004-20200611.2.x86_64.qcow2 -O centos-source.img
 
 virsh destroy --domain centos8-cloud
 virsh undefine --domain centos8-cloud --remove-all-storage
 
-cp CentOS-8-GenericCloud-8.2.2004-20200611.2.x86_64.qcow2 centos8.img
+cp centos-source.img centos8.img
 qemu-img resize centos8.img +22G
 
 sudo cloud-localds -v cloud-init.iso cloud-config-libvirt.yml
