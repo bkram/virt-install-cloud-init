@@ -1,5 +1,6 @@
 #cloud-config
-fqdn: ubuntu20-cloud.ttl
+fqdn: {{ hostname }}.ttl
+manage_etc_hosts: true
 preserv_hostname: false
 timezone: Europe/Amsterdam
 package_upgrade: true

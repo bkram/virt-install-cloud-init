@@ -1,23 +1,26 @@
 #!/bin/bash
-wget https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64-disk-kvm.img -O ubuntu-source.img
+VMNAME=$1
 
-virsh destroy --domain ubuntu20-cloud
-virsh undefine --domain ubuntu20-cloud --remove-all-storage
+# wget https://cloud-images.ubuntu.com/focal/current/focal-server-cloudimg-amd64-disk-kvm.img -O ../images/source-ubuntu20.04.img
 
-cp ubuntu-source.img ubuntu20.img
-qemu-img resize ubuntu20.img +32G
+cp ../images/source-ubuntu20.04.img ../images/$VMNAME.img
+qemu-img resize ../images/$VMNAME.img +32G
 
-sudo cloud-localds -v cloud-init.iso cloud-config-libvirt.yml #--network-config network.yml
+cat cloud-config-libvirt.yml | sed s/'{{ hostname }}'/$VMNAME/g > seed-$VMNAME.yml
 
-sudo virt-install \
-            --name ubuntu20-cloud \
-            --memory 4096 \
-            --vcpus 4 \
-            --disk ubuntu20.img,device=disk,bus=virtio \
-            --disk cloud-init.iso,device=disk,bus=virtio \
-            --os-variant ubuntu20.04 \
-            --network network=default,model=virtio \
-            --virt-type kvm \
-            --import \
-            --console pty,target_type=virtio \
-            --noautoconsole \
+rm -f ../images/seed-$VMNAME.iso
+cloud-localds -v ../images/seed-$VMNAME.iso seed-$VMNAME.yml
+rm seed-$VMNAME.yml
+
+virt-install \
+    --name $VMNAME \
+    --memory 4096 \
+    --vcpus 4 \
+    --disk ../images/$VMNAME.img,device=disk,bus=virtio \
+    --disk ../images/seed-$VMNAME.iso,device=disk,bus=virtio \
+    --os-variant ubuntu20.04 \
+    --network network=default,model=virtio \
+    --virt-type kvm \
+    --import \
+    --console pty,target_type=virtio \
+    --noautoconsole \
