@@ -1,13 +1,14 @@
 #!/bin/bash
 VMNAME=$1
-URL=https://cloud.centos.org/centos/8/x86_64/images/CentOS-8-GenericCloud-8.2.2004-20200611.2.x86_64.qcow2
-SOURCE=source-centos8.img
-OSVARIANT=centos8
+VMDISK=vm-$1
+URL=https://cloud-images.ubuntu.com/groovy/current/groovy-server-cloudimg-amd64-disk-kvm.img
+SOURCE=source-ubuntu20.10.img
+OSVARIANT=ubuntu20.04
 
 # wget $URL -O ../images/$SOURCE
 
-cp ../images/$SOURCE ../images/$VMNAME.img
-qemu-img resize ../images/$VMNAME.img +32G
+cp ../images/$SOURCE ../images/$VMDISK.img
+qemu-img resize ../images/$VMDISK.img +32G
 
 cloud-localds -v ../images/seed-$VMNAME.iso ../templates/cloud-config-libvirt.yml
 
@@ -15,7 +16,7 @@ virt-install \
     --name $VMNAME \
     --memory 4096 \
     --vcpus 4 \
-    --disk ../images/$VMNAME.img,device=disk,bus=virtio \
+    --disk ../images/$VMDISK.img,device=disk,bus=virtio \
     --disk ../images/seed-$VMNAME.iso,device=cdrom \
     --os-variant $OSVARIANT \
     --network network=default,model=virtio \
