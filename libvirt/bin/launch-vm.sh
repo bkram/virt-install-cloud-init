@@ -3,15 +3,16 @@
 # Deploy cloud image to local libvirt, with a cloud init configuration
 
 function usage() {
-    echo "Usage: $(basename $0) [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-t cloudinit file]" 2>&1
+    echo "Usage: $(basename $0) [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file]" 2>&1
     echo 'Deploy cloud image to local libvirt, with a cloud init configuration'
     echo '   -d     Distribution name'
     echo '   -n     VM Name'
     echo '   -c     Amount of vcpus'
     echo '   -m     Amount of memory in MB'
     echo '   -s     Size to add to the disk in GB'
+    echo '   -S     reSize the disk to GB'
     echo '   -t     Alternative cloud-init config.yml'
-    echo '   -f     Fetch cloud image, eben when image already exists'
+    echo '   -f     Fetch cloud image, even when image already exists'
     exit 1
 }
 
@@ -25,26 +26,35 @@ optstring="d:n:c:m:s:ft:"
 
 while getopts ${optstring} arg; do
     case ${arg} in
-    d)
-        DISTRIBUTION="${OPTARG}"
-        ;;
-    n)
-        VMNAME="${OPTARG}"
-        ;;
-    f)
-        FETCH='true'
-        ;;
-    s)
-        SIZE="${OPTARG}"
-        ;;
-    t)
-        TEMPLATE="${OPTARG}"
-        ;;
-    ?)
-        echo "Invalid option: -${OPTARG}."
-        echo
-        usage
-        ;;
+        d)
+            DISTRIBUTION="${OPTARG}"
+            ;;
+        n)
+            VMNAME="${OPTARG}"
+            ;;
+        c)
+            VCPUS="${OPTARG}"
+            ;;
+        m)
+            VMEM="${OPTARG}"
+            ;;
+        f)
+            FETCH='true'
+            ;;
+        s)
+            SIZE="${OPTARG}"
+            ;;
+        S)
+            ABSSIZE="${OPTARG}"
+            ;;
+        t)
+            TEMPLATE="${OPTARG}"
+            ;;
+        ?)
+            echo "Invalid option: -${OPTARG}."
+            echo
+            usage
+            ;;
     esac
 done
 
@@ -80,9 +90,17 @@ prep-disk() {
     fi
 }
 
+resize-disk() {
+    VMDISK=vm-${VMNAME}
+    cp ../images/${SOURCE} ../images/${VMDISK}.img
+    if [[ ${ABSSIZE} -gt 0 ]]; then
+        qemu-img resize ../images/${VMDISK}.img +${SIZE}G
+    fi
+}
+
 prep-seed() {
     if [[ -z "${TEMPLATE}" ]]; then
-        TEMPLATE=cloud-config-libvirt.yml
+        TEMPLATE=cloud-config-virt.yml
     else
         if [ ! -e "../templates/${TEMPLATE}" ]; then
             echo Template ${TEMPLATE} not detected on disk.
@@ -95,8 +113,8 @@ prep-seed() {
 vm-setup() {
     virt-install \
         --name ${VMNAME} \
-        --memory 4096 \
-        --vcpus 4 \
+        --memory ${VMEM} \
+        --vcpus ${VCPUS} \
         --disk ../images/${VMDISK}.img,device=disk,bus=virtio \
         --disk ../images/seed-${VMNAME}.iso,device=cdrom \
         --os-variant ${OSVARIANT} \
@@ -110,9 +128,11 @@ vm-setup() {
     virsh detach-disk --domain ${VMNAME} $(virsh dumpxml --domain $VMNAME | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | egrep iso\$) --persistent --config
     rm -f ../images/seed-${VMNAME}.iso
     virsh start --domain ${VMNAME}
+    virsh domifaddr --domain ${VMNAME}
 }
 
 source-image
 prep-disk
+resize-disk
 prep-seed
 vm-setup
