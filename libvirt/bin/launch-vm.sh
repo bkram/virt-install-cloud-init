@@ -26,35 +26,35 @@ optstring="d:n:c:m:s:ft:"
 
 while getopts ${optstring} arg; do
     case ${arg} in
-    d)
-        DISTRIBUTION="${OPTARG}"
-        ;;
-    n)
-        VMNAME="${OPTARG}"
-        ;;
-    c)
-        VCPUS="${OPTARG}"
-        ;;
-    m)
-        VMEM="${OPTARG}"
-        ;;
-    f)
-        FETCH='true'
-        ;;
-    s)
-        SIZE="${OPTARG}"
-        ;;
-    S)
-        ABSSIZE="${OPTARG}"
-        ;;
-    t)
-        TEMPLATE="${OPTARG}"
-        ;;
-    ?)
-        echo "Invalid option: -${OPTARG}."
-        echo
-        usage
-        ;;
+        d)
+            DISTRIBUTION="${OPTARG}"
+            ;;
+        n)
+            VMNAME="${OPTARG}"
+            ;;
+        c)
+            VCPUS="${OPTARG}"
+            ;;
+        m)
+            VMEM="${OPTARG}"
+            ;;
+        f)
+            FETCH='true'
+            ;;
+        s)
+            SIZE="${OPTARG}"
+            ;;
+        S)
+            ABSSIZE="${OPTARG}"
+            ;;
+        t)
+            TEMPLATE="${OPTARG}"
+            ;;
+        ?)
+            echo "Invalid option: -${OPTARG}."
+            echo
+            usage
+            ;;
     esac
 done
 
