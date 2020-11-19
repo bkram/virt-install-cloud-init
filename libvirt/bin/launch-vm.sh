@@ -22,7 +22,7 @@ if [[ ${#} -eq 0 ]]; then
 fi
 
 # Define list of arguments expected in the input
-optstring="d:n:c:m:s:ft:"
+optstring="d:n:c:m:s:ft:S:"
 
 while getopts ${optstring} arg; do
     case ${arg} in
@@ -94,7 +94,7 @@ resize-disk() {
     VMDISK=vm-${VMNAME}
     cp ../images/${SOURCE} ../images/${VMDISK}.img
     if [[ ${ABSSIZE} -gt 0 ]]; then
-        qemu-img resize ../images/${VMDISK}.img +${SIZE}G
+        qemu-img resize ../images/${VMDISK}.img ${SIZE}G
     fi
 }
 
