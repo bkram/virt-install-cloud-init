@@ -1,7 +1,7 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
-VER="1.0.1 (20201120)"
+VER="1.0.2 (20201120)"
 
 function usage() {
     echo "Usage: $(basename $0) [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file]" 2>&1
@@ -75,8 +75,6 @@ if [[ ${USAGE} == true ]]; then
   usage
   exit 0
 fi
-
-
 
 if [ -e ../templates/settings.ini ]; then
     source ../templates/settings.ini
