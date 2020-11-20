@@ -2,3 +2,4 @@ libvirt/*/*.img
 libvirt/*/*.iso
 libvirt/*/*.raw
 libvirt/*/*.qcow2
+templates/settings.ini
