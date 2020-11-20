@@ -1,6 +1,7 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
+VER="1.0.1 (20201120)"
 
 function usage() {
     echo "Usage: $(basename $0) [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file]" 2>&1
@@ -13,6 +14,7 @@ function usage() {
     echo '   -S     reSize the disk to GB'
     echo '   -t     Alternative cloud-init config.yml'
     echo '   -f     Fetch cloud image, even when image already exists'
+    echo '   -v     show version'
     exit 1
 }
 
@@ -22,7 +24,7 @@ if [[ ${#} -eq 0 ]]; then
 fi
 
 # Define list of arguments expected in the input
-optstring="d:n:c:m:s:ft:S:"
+optstring="d:n:c:m:s:ft:S:vh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
@@ -44,6 +46,12 @@ while getopts ${optstring} arg; do
         s)
             SIZE="${OPTARG}"
             ;;
+        v)
+            SVER='true'
+            ;;
+        h)
+            USAGE='true'
+            ;;
         S)
             ABSSIZE="${OPTARG}"
             ;;
@@ -57,6 +65,18 @@ while getopts ${optstring} arg; do
             ;;
     esac
 done
+
+if [[ ${SVER} == true ]]; then
+  echo "${0} version: ${VER}"
+  exit 0
+fi
+
+if [[ ${USAGE} == true ]]; then
+  usage
+  exit 0
+fi
+
+
 
 if [ -e ../templates/settings.ini ]; then
     source ../templates/settings.ini
