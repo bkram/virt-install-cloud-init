@@ -1,7 +1,7 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
-VER="1.0.3 (20201120)"
+VER="1.0.4 (20201121)"
 
 function usage() {
     echo "Usage: $(basename $0) [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file]" 2>&1
@@ -143,7 +143,7 @@ vm-setup() {
         --console ${CONSOLE} \
         --video none
 
-    virsh detach-disk --domain ${VMNAME} $(virsh dumpxml --domain $VMNAME | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | egrep iso\$) --persistent --config
+    virsh detach-disk --domain ${VMNAME} "$(virsh dumpxml --domain $VMNAME | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --persistent --config
     rm -f ${SCRIPTHOME}/images/seed-${VMNAME}.iso
     virsh start --domain ${VMNAME}
     virsh domifaddr --domain ${VMNAME}
