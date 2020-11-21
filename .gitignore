@@ -1,8 +1,7 @@
-*/*.img
-*/*.iso
-*/*.raw
-*/*.qcow2
-templates/settings.ini
-templates/cloud-config-virt.yml
 images/*.img
+images/*.iso
+images/*.raw
+images/*.qcow2
+templates/settings.ini
+templates/cloud-config.yml
 .vscode
