@@ -1,7 +1,7 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
-VER="1.0.2 (20201120)"
+VER="1.0.3 (20201120)"
 
 function usage() {
     echo "Usage: $(basename $0) [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file]" 2>&1
@@ -35,10 +35,10 @@ while getopts ${optstring} arg; do
             VMNAME="${OPTARG}"
             ;;
         c)
-            VCPUS="${OPTARG}"
+            VCPUS="--vcpus ${OPTARG}"
             ;;
         m)
-            VMEM="${OPTARG}"
+            VMEM="--memory ${OPTARG}"
             ;;
         f)
             FETCH='true'
@@ -76,15 +76,15 @@ if [[ ${USAGE} == true ]]; then
   exit 0
 fi
 
-if [ -e ../templates/settings.ini ]; then
-    source ../templates/settings.ini
+if [ -e ${SCRIPTHOME}/templates/settings.ini ]; then
+    source ${SCRIPTHOME}/templates/settings.ini
 else
     NETWORK=default
     DOMAIN=lan
 fi
 
-if [ -e ../templates/${DISTRIBUTION}.ini ]; then
-    source ../templates/${DISTRIBUTION}.ini
+if [ -e ${SCRIPTHOME}/templates/${DISTRIBUTION}.ini ]; then
+    source ${SCRIPTHOME}/templates/${DISTRIBUTION}.ini
 else
     echo "Distribution template ${DISTRIBUTION}.ini not found"
     exit 1
@@ -92,27 +92,27 @@ fi
 
 source-image() {
     if [[ ${FETCH} == true ]]; then
-        wget ${URL} -O ../images/${SOURCE}
+        wget ${URL} -O ${SCRIPTHOME}/images/${SOURCE}
     fi
-    if [ ! -e ../images/${SOURCE} ]; then
-        echo Source image ${SOURCE} not detected on disk.
+    if [ ! -e ${SCRIPTHOME}/images/${SOURCE} ]; then
+        echo Source image ${SOURCE} not detected on disk, You can enable a download with -f
         exit 1
     fi
 }
 
 prep-disk() {
     VMDISK=vm-${VMNAME}
-    cp ../images/${SOURCE} ../images/${VMDISK}.img
+    cp ${SCRIPTHOME}/images/${SOURCE} ${SCRIPTHOME}/images/${VMDISK}.img
     if [[ ${SIZE} -gt 0 ]]; then
-        qemu-img resize ../images/${VMDISK}.img +${SIZE}G
+        qemu-img resize ${SCRIPTHOME}/images/${VMDISK}.img +${SIZE}G
     fi
 }
 
 resize-disk() {
     VMDISK=vm-${VMNAME}
-    cp ../images/${SOURCE} ../images/${VMDISK}.img
+    cp ${SCRIPTHOME}/images/${SOURCE} ${SCRIPTHOME}/images/${VMDISK}.img
     if [[ ${ABSSIZE} -gt 0 ]]; then
-        qemu-img resize ../images/${VMDISK}.img ${SIZE}G
+        qemu-img resize ${SCRIPTHOME}/images/${VMDISK}.img ${SIZE}G
     fi
 }
 
@@ -120,21 +120,21 @@ prep-seed() {
     if [[ -z "${TEMPLATE}" ]]; then
         TEMPLATE=cloud-config-virt.yml
     else
-        if [ ! -e "../templates/${TEMPLATE}" ]; then
+        if [ ! -e "${SCRIPTHOME}/templates/${TEMPLATE}" ]; then
             echo Template ${TEMPLATE} not detected on disk.
             exit 1
         fi
     fi
-    cloud-localds -v ../images/seed-${VMNAME}.iso ../templates/${TEMPLATE}
+    cloud-localds -v ${SCRIPTHOME}/images/seed-${VMNAME}.iso ${SCRIPTHOME}/templates/${TEMPLATE}
 }
 
 vm-setup() {
     virt-install \
         --name ${VMNAME} \
-        --memory ${VMEM} \
-        --vcpus ${VCPUS} \
-        --disk ../images/${VMDISK}.img,device=disk,bus=virtio \
-        --disk ../images/seed-${VMNAME}.iso,device=cdrom \
+        ${VMEM} \
+        ${VCPUS} \
+        --disk ${SCRIPTHOME}/images/${VMDISK}.img,device=disk,bus=virtio \
+        --disk ${SCRIPTHOME}/images/seed-${VMNAME}.iso,device=cdrom \
         --os-variant ${OSVARIANT} \
         --network network=${NETWORK},model=virtio \
         --virt-type kvm \
@@ -144,7 +144,7 @@ vm-setup() {
         --video none
 
     virsh detach-disk --domain ${VMNAME} $(virsh dumpxml --domain $VMNAME | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | egrep iso\$) --persistent --config
-    rm -f ../images/seed-${VMNAME}.iso
+    rm -f ${SCRIPTHOME}/images/seed-${VMNAME}.iso
     virsh start --domain ${VMNAME}
     virsh domifaddr --domain ${VMNAME}
 }

@@ -1,0 +1,28 @@
+#cloud-config
+manage_etc_hosts: true
+preserv_hostname: false
+timezone: Europe/Amsterdam
+package_upgrade: true
+package_update: true
+packages:
+  - openssh-server
+  - sudo
+  - qemu-guest-agent
+runcmd:
+  - echo UsePAM yes >> /etc/ssh/sshd_config
+  - [systemctl, enable, sshd]
+  - [systemctl, start, sshd]
+users:
+  - name: cloud
+    gecos: Cloud User
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    groups: sudo
+    lock_passwd: False
+    passwd: $6$7guwKMzfzh2tsoef$GpUVIgeFyCGigDVR2YMW6yk0hTMgCjmC3Bxt/MxnbaoGKeVKak2WU2eGDGnRO2iXfu9dk3RbAcX1Q9jP/do4d1
+    #ssh-authorized-keys:
+    #  - ssh-rsa <redacted>
+power_state:
+  mode: poweroff
+  timeout: 30
+  condition: True

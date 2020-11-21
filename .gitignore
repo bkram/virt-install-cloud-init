@@ -1,5 +1,8 @@
-libvirt/*/*.img
-libvirt/*/*.iso
-libvirt/*/*.raw
-libvirt/*/*.qcow2
+*/*.img
+*/*.iso
+*/*.raw
+*/*.qcow2
 templates/settings.ini
+templates/cloud-config-virt.yml
+images/*.img
+.vscode
