@@ -1,2 +1,4 @@
 NETWORK=default
 DOMAIN=lan
+VMEM=1024
+VCPUS=2
