@@ -1,7 +1,8 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
-VER="1.0.4 (20201121)"
+VER="1.1.0 (20201121)"
+SCRIPTHOME="$(dirname $(dirname $(realpath $0)))"
 
 function usage() {
     echo "Usage: $(basename $0) [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file]" 2>&1
@@ -35,10 +36,10 @@ while getopts ${optstring} arg; do
             VMNAME="${OPTARG}"
             ;;
         c)
-            VCPUS="--vcpus ${OPTARG}"
+            VCPUS="${OPTARG}"
             ;;
         m)
-            VMEM="--memory ${OPTARG}"
+            VMEM="${OPTARG}"
             ;;
         f)
             FETCH='true'
@@ -81,6 +82,8 @@ if [ -e ${SCRIPTHOME}/templates/settings.ini ]; then
 else
     NETWORK=default
     DOMAIN=lan
+    VCPUS=2
+    VMEM=1024
 fi
 
 if [ -e ${SCRIPTHOME}/templates/${DISTRIBUTION}.ini ]; then
@@ -131,8 +134,8 @@ prep-seed() {
 vm-setup() {
     virt-install \
         --name ${VMNAME} \
-        ${VMEM} \
-        ${VCPUS} \
+        --memory ${VMEM} \
+        --vcpus ${VCPUS} \
         --disk ${SCRIPTHOME}/images/${VMDISK}.img,device=disk,bus=virtio \
         --disk ${SCRIPTHOME}/images/seed-${VMNAME}.iso,device=cdrom \
         --os-variant ${OSVARIANT} \
