@@ -1,7 +1,7 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
-VER="1.0.2 (20201120)"
+VER="1.1.0 (20201123)"
 
 function usage() {
     echo "Usage: $(basename $0) [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file]" 2>&1
@@ -116,6 +116,15 @@ resize-disk() {
     fi
 }
 
+defaults() {
+    if [[ -z "${VMEM}" ]]; then
+        VMEM=1024
+    fi
+    if [[ -z "${VCPUS}" ]]; then
+        VCPUS=2
+    fi
+}
+
 prep-seed() {
     if [[ -z "${TEMPLATE}" ]]; then
         TEMPLATE=cloud-config-virt.yml
@@ -153,4 +162,5 @@ source-image
 prep-disk
 resize-disk
 prep-seed
+defaults
 vm-setup
