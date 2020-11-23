@@ -83,7 +83,7 @@ else
     NETWORK=default
     DOMAIN=lan
     VCPUS=2
-    VMEM=1024
+    VMEM=2048
 fi
 
 if [ -e ${SCRIPTHOME}/templates/${DISTRIBUTION}.ini ]; then
