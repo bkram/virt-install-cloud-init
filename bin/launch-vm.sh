@@ -2,8 +2,30 @@
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
 set -x
-VER="1.1.0 (20201121)"
+VER="1.2.0 (20201124)"
 SCRIPTHOME="$(dirname $(dirname $(realpath "$0")))"
+
+if [ -e "${SCRIPTHOME}/launch-vm.ini" ]; then
+    source "${SCRIPTHOME}/launch-vm.ini"
+elif [ -e "${SCRIPTHOME}/templates/launch-vm.ini" ]; then
+    source "${SCRIPTHOME}/templates/launch-vm.ini"
+elif [ -e /usr/local/etc/launch-vm.ini ]; then
+    source /usr/local/etc/launch-vm.ini
+elif [ -e ~/.local/launch-vm.ini ]; then
+    source ~/.local/launch-vm.ini
+elif [ -e /etc/launch-vm.ini ]; then
+    source /etc/launch-vm.ini
+else
+    NETWORK=default
+    DOMAIN=lan
+    VCPUS=2
+    VMEM=2048
+    LVTEMPLATES=${SCRIPTHOME}/templates
+    LVIMAGES=${SCRIPTHOME}/images
+    LVCLOUD=${LVIMAGES}
+    LVVMS=${LVIMAGES}
+    LVSEED=${LVIMAGES}
+fi
 
 function usage() {
     echo "Usage: $(basename "$0") [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file]" 2>&1
@@ -12,10 +34,9 @@ function usage() {
     echo '   -n     VM Name'
     echo '   -c     Amount of vcpus'
     echo '   -m     Amount of memory in MB'
-    echo '   -s     Size to add to the disk in GB'
-    echo '   -S     reSize the disk to GB'
+    echo '   -s     reSize the disk to GB'
     echo '   -t     Alternative cloud-init config.yml'
-    echo '   -f     Fetch cloud image, even when image already exists'
+    echo '   -f     Fetch cloud image, overwrite when image already exists'
     echo '   -v     show version'
     exit 1
 }
@@ -26,7 +47,7 @@ if [[ ${#} -eq 0 ]]; then
 fi
 
 # Define list of arguments expected in the input
-optstring="d:n:c:m:s:ft:S:vh"
+optstring="d:n:c:m:s:ft:vh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
@@ -54,9 +75,6 @@ while getopts ${optstring} arg; do
     h)
         USAGE='true'
         ;;
-    S)
-        ABSSIZE="${OPTARG}"
-        ;;
     t)
         TEMPLATE="${OPTARG}"
         ;;
@@ -78,20 +96,8 @@ if [[ ${USAGE} == true ]]; then
     exit 0
 fi
 
-if [ -e "${SCRIPTHOME}/templates/settings.ini" ]; then
-    source "${SCRIPTHOME}/templates/settings.ini"
-else
-    NETWORK=default
-    DOMAIN=lan
-    VCPUS=2
-    VMEM=2048
-    CLOUD=/var/lib/libvirt/images/
-    VMS=/var/lib/libvirt/images/
-    SEED=/var/lib/libvirt/images/
-fi
-
-if [ -e "${SCRIPTHOME}/templates/${DISTRIBUTION}.ini" ]; then
-    source "${SCRIPTHOME}/templates/${DISTRIBUTION}.ini"
+if [ -e "${LVTEMPLATES}/${DISTRIBUTION}.ini" ]; then
+    source "${LVTEMPLATES}/${DISTRIBUTION}.ini"
 else
     echo "Distribution template ${DISTRIBUTION}.ini not found"
     exit 1
@@ -99,27 +105,19 @@ fi
 
 source-image() {
     if [[ ${FETCH} == true ]]; then
-        wget "${URL}" -O "${CLOUD}/${SOURCE}"
+        wget "${URL}" -O "${LVCLOUD}/${SOURCE}"
     fi
-    if [ ! -e "${CLOUD}/${SOURCE}" ]; then
+    if [ ! -e "${LVCLOUD}/${SOURCE}" ]; then
         echo Source image "${SOURCE}" not detected on disk, You can enable a download with -f
         exit 1
     fi
 }
 
-prep-disk() {
-    VMDISK=vm-${VMNAME}
-    cp "${CLOUD}/${SOURCE}" "${VMS}/${VMDISK}.img"
-    if [[ ${SIZE} -gt 0 ]]; then
-        qemu-img resize "${VMS}/${VMDISK}.img" +"${SIZE}"G
-    fi
-}
-
 resize-disk() {
     VMDISK=vm-${VMNAME}
-    cp "${CLOUD}/${SOURCE}" "${VMS}/${VMDISK}.img"
-    if [[ ${ABSSIZE} -gt 0 ]]; then
-        qemu-img resize "${VMS}/${VMDISK}.img" "${ABSSIZE}"G
+    cp "${LVCLOUD}/${SOURCE}" "${LVVMS}/${VMDISK}.img"
+    if [[ ${SIZE} -gt 0 ]]; then
+        qemu-img resize "${LVVMS}/${VMDISK}.img" "${ABSSIZE}"G
     fi
 }
 
@@ -127,12 +125,12 @@ prep-seed() {
     if [[ -z "${TEMPLATE}" ]]; then
         TEMPLATE=cloud-config.yml
     else
-        if [ ! -e "${SCRIPTHOME}/templates/${TEMPLATE}" ]; then
+        if [ ! -e "${LVTEMPLATES}/${TEMPLATE}" ]; then
             echo Template ${TEMPLATE} not detected on disk.
             exit 1
         fi
     fi
-    cloud-localds -v "${SEED}/${VMNAME}.iso" "${SCRIPTHOME}/templates/${TEMPLATE}"
+    cloud-localds -v "${LVSEED}/${VMNAME}.iso" "${LVTEMPLATES}/${TEMPLATE}"
 }
 
 vm-setup() {
@@ -140,24 +138,24 @@ vm-setup() {
         --name "${VMNAME}" \
         --memory "${VMEM}" \
         --vcpus "${VCPUS}" \
-        --disk "${VMS}/${VMDISK}.img",device=disk,bus=virtio \
-        --disk "${SEED}/${VMNAME}.iso",device=cdrom \
+        --disk "${LVVMS}/${VMDISK}.img",device=disk,bus=virtio \
+        --disk "${LVSEED}/${VMNAME}.iso",device=cdrom \
         --os-variant "${OSVARIANT}" \
         --network network="${NETWORK}",model=virtio \
         --virt-type kvm \
         --import \
         --qemu-commandline='-smbios type=1,serial=ds=nocloud;h='"${VMNAME}"'.'"${DOMAIN}"'' \
         --console "${CONSOLE}" \
-        --video none
+        --video none \
+        --graphics none
 
     virsh detach-disk --domain "${VMNAME}" "$(virsh dumpxml --domain "$VMNAME" | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --persistent --config
-    rm "${SEED}/${VMNAME}.iso"
+    rm "${LVSEED}/${VMNAME}.iso"
     virsh start --domain "${VMNAME}"
     virsh domifaddr --domain "${VMNAME}"
 }
 
 source-image
-prep-disk
 resize-disk
 prep-seed
 vm-setup

@@ -1,0 +1,8 @@
+NETWORK=default
+DOMAIN=lan
+VMEM=2048
+VCPUS=2
+LVTEMPLATES=${SCRIPTHOME}/templates
+LVCLOUD=/var/lib/libvirt/images
+LVVMS=/var/lib/libvirt/images
+LVSEED=/var/lib/libvirt/images
