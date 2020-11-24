@@ -2,6 +2,6 @@ images/*.img
 images/*.iso
 images/*.raw
 images/*.qcow2
-templates/settings.ini
 templates/cloud-config.yml
+templates/launch-vm.ini
 .vscode
