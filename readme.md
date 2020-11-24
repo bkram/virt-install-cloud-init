@@ -40,3 +40,7 @@ qemu-nbd -d /dev/nbd0
 ## Thanks to our contributors
 
 - rotflol (Ronald Offerman)
+
+## Required packages (Ubuntu)
+
+- cloud-image-utils
