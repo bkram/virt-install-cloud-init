@@ -4,6 +4,24 @@
 VER="1.1.0 (20201121)"
 SCRIPTHOME="$(dirname $(dirname $(realpath $0)))"
 
+if [ -e ${SCRIPTHOME}/launch-vm.ini ]; then
+    source ${SCRIPTHOME}/launch-vm.ini
+elif [ -e /usr/local/etc/launch-vm.ini ]; then
+    source /usr/local/etc/launch-vm.ini
+elif [ -e ~/.local/launch-vm.ini ]; then
+    source ~/.local/launch-vm.ini
+elif [ -e /etc/launch-vm.ini ]; then
+    source /etc/launch-vm.ini
+else
+    LVTEMPLATES=${SCRIPTHOME}/templates
+    LVIMAGES=${SCRIPTHOME}/images
+    NETWORK=default
+    DOMAIN=lan
+    VCPUS=2
+    VMEM=2048
+fi
+
+
 function usage() {
     echo "Usage: $(basename $0) [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file]" 2>&1
     echo 'Deploy cloud image to local libvirt, with a cloud init configuration'
@@ -77,45 +95,36 @@ if [[ ${USAGE} == true ]]; then
   exit 0
 fi
 
-if [ -e ${SCRIPTHOME}/templates/settings.ini ]; then
-    source ${SCRIPTHOME}/templates/settings.ini
+if [ -e ${LVTEMPLATES}/${DISTRIBUTION}.ini ]; then
+    source ${LVTEMPLATES}/${DISTRIBUTION}.ini
 else
-    NETWORK=default
-    DOMAIN=lan
-    VCPUS=2
-    VMEM=2048
-fi
-
-if [ -e ${SCRIPTHOME}/templates/${DISTRIBUTION}.ini ]; then
-    source ${SCRIPTHOME}/templates/${DISTRIBUTION}.ini
-else
-    echo "Distribution template ${DISTRIBUTION}.ini not found"
+    echo "Distribution template ${LVTEMPLATES}/${DISTRIBUTION}.ini not found"
     exit 1
 fi
 
 source-image() {
     if [[ ${FETCH} == true ]]; then
-        wget ${URL} -O ${SCRIPTHOME}/images/${SOURCE}
+        wget ${URL} -O ${LVIMAGES}/${SOURCE}
     fi
-    if [ ! -e ${SCRIPTHOME}/images/${SOURCE} ]; then
-        echo Source image ${SOURCE} not detected on disk, You can enable a download with -f
+    if [ ! -e ${LVIMAGES}/${SOURCE} ]; then
+        echo Source image ${LVIMAGES}/${SOURCE} not detected on disk, You can enable a download with -f
         exit 1
     fi
 }
 
 prep-disk() {
     VMDISK=vm-${VMNAME}
-    cp ${SCRIPTHOME}/images/${SOURCE} ${SCRIPTHOME}/images/${VMDISK}.img
+    cp ${LVIMAGES}/${SOURCE} ${LVIMAGES}/${VMDISK}.img
     if [[ ${SIZE} -gt 0 ]]; then
-        qemu-img resize ${SCRIPTHOME}/images/${VMDISK}.img +${SIZE}G
+        qemu-img resize ${LVIMAGES}/${VMDISK}.img +${SIZE}G
     fi
 }
 
 resize-disk() {
     VMDISK=vm-${VMNAME}
-    cp ${SCRIPTHOME}/images/${SOURCE} ${SCRIPTHOME}/images/${VMDISK}.img
+    cp ${LVIMAGES}/${SOURCE} ${LVIMAGES}/${VMDISK}.img
     if [[ ${ABSSIZE} -gt 0 ]]; then
-        qemu-img resize ${SCRIPTHOME}/images/${VMDISK}.img ${SIZE}G
+        qemu-img resize ${LVIMAGES}/${VMDISK}.img ${SIZE}G
     fi
 }
 
@@ -123,12 +132,12 @@ prep-seed() {
     if [[ -z "${TEMPLATE}" ]]; then
         TEMPLATE=cloud-config-virt.yml
     else
-        if [ ! -e "${SCRIPTHOME}/templates/${TEMPLATE}" ]; then
-            echo Template ${TEMPLATE} not detected on disk.
+        if [ ! -e "${TEMPLATES}/${TEMPLATE}" ]; then
+            echo Template ${TEMPLATES}/${TEMPLATE} not detected on disk.
             exit 1
         fi
     fi
-    cloud-localds -v ${SCRIPTHOME}/images/seed-${VMNAME}.iso ${SCRIPTHOME}/templates/${TEMPLATE}
+    cloud-localds -v ${LVIMAGES}/seed-${VMNAME}.iso ${LVTEMPLATES}/${TEMPLATE}
 }
 
 vm-setup() {
@@ -136,8 +145,8 @@ vm-setup() {
         --name ${VMNAME} \
         --memory ${VMEM} \
         --vcpus ${VCPUS} \
-        --disk ${SCRIPTHOME}/images/${VMDISK}.img,device=disk,bus=virtio \
-        --disk ${SCRIPTHOME}/images/seed-${VMNAME}.iso,device=cdrom \
+        --disk ${LVIMAGES}/${VMDISK}.img,device=disk,bus=virtio \
+        --disk ${LVIMAGES}/seed-${VMNAME}.iso,device=cdrom \
         --os-variant ${OSVARIANT} \
         --network network=${NETWORK},model=virtio \
         --virt-type kvm \
@@ -147,7 +156,7 @@ vm-setup() {
         --video none
 
     virsh detach-disk --domain ${VMNAME} "$(virsh dumpxml --domain $VMNAME | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --persistent --config
-    rm -f ${SCRIPTHOME}/images/seed-${VMNAME}.iso
+    rm -f ${LVIMAGES}/seed-${VMNAME}.iso
     virsh start --domain ${VMNAME}
     virsh domifaddr --domain ${VMNAME}
 }
