@@ -7,9 +7,7 @@ It is a bash to script easily setup cloud init virtual machines with virt instal
 ## Example usage
 
 ```bash
-export SCRIPTHOME=/opt/virt-install-cloud-init
-sudo -E $SCRIPTHOME/bin/launch-vm.sh  -d centos8 -c 2 -m 2048 -s 32 -t cloud-config-libvirt.yml -n CentOS-8
-sudo virsh domifaddr CentOS-8
+sudo ./launch-vm.sh  -d centos8 -c 2 -m 2048 -s 32 -n CentOS-8
 ```
 
 ## Configuration

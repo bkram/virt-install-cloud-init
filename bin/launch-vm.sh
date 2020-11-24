@@ -2,17 +2,24 @@
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
 VER="1.2.0 (20201124)"
+
+# shellcheck disable=SC2046
 SCRIPTHOME="$(dirname $(dirname $(realpath "$0")))"
 
 if [ -e "${SCRIPTHOME}/launch-vm.ini" ]; then
+    # shellcheck source=/dev/null
     source "${SCRIPTHOME}/launch-vm.ini"
 elif [ -e "${SCRIPTHOME}/templates/launch-vm.ini" ]; then
+    # shellcheck source=/dev/null
     source "${SCRIPTHOME}/templates/launch-vm.ini"
 elif [ -e /usr/local/etc/launch-vm.ini ]; then
+    # shellcheck source=/dev/null
     source /usr/local/etc/launch-vm.ini
 elif [ -e ~/.local/launch-vm.ini ]; then
+    # shellcheck source=/dev/null
     source ~/.local/launch-vm.ini
 elif [ -e /etc/launch-vm.ini ]; then
+    # shellcheck disable=SC1091
     source /etc/launch-vm.ini
 else
     NETWORK=default
@@ -96,6 +103,7 @@ if [[ ${USAGE} == true ]]; then
 fi
 
 if [ -e "${LVTEMPLATES}/${DISTRIBUTION}.ini" ]; then
+    # shellcheck source=/dev/null
     source "${LVTEMPLATES}/${DISTRIBUTION}.ini"
 else
     echo "Distribution template ${DISTRIBUTION}.ini not found"
@@ -112,11 +120,11 @@ source-image() {
     fi
 }
 
-resize-disk() {
+prep-disk() {
     VMDISK=vm-${VMNAME}
     cp "${LVCLOUD}/${SOURCE}" "${LVVMS}/${VMDISK}.img"
     if [[ ${SIZE} -gt 0 ]]; then
-        qemu-img resize "${LVVMS}/${VMDISK}.img" "${ABSSIZE}"G
+        qemu-img resize "${LVVMS}/${VMDISK}.img" "${SIZE}"G
     fi
 }
 
@@ -155,6 +163,6 @@ vm-setup() {
 }
 
 source-image
-resize-disk
+prep-disk
 prep-seed
 vm-setup
