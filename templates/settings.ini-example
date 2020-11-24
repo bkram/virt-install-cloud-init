@@ -2,3 +2,6 @@ NETWORK=default
 DOMAIN=lan
 VMEM=2048
 VCPUS=2
+CLOUD=/var/lib/libvirt/images/cloud/source
+VMS=/var/lib/libvirt/images/cloud/vms
+SEED=/var/lib/libvirt/images/cloud/seed
