@@ -1,7 +1,6 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
-set -x
 VER="1.2.0 (20201124)"
 SCRIPTHOME="$(dirname $(dirname $(realpath "$0")))"
 
