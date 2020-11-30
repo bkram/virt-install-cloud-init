@@ -30,16 +30,18 @@ while getopts ${optstring} arg; do
     esac
 done
 
-# if no input argument found, exit the script with usage
+# If no input argument found, exit the script with usage
 if [[ ${#} -eq 0 ]]; then
     usage
 fi
 
+# Show version if requested
 if [[ ${SVER} == true ]]; then
     echo "${0} version: ${VER}"
     exit 0
 fi
 
+# Remove domain if detected
 if [ -n "${DOMAIN}" ]; then
     if virsh dominfo --domain "${DOMAIN}" >/dev/null 2>&1; then
         virsh destroy --domain "${DOMAIN}"
