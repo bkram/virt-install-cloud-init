@@ -42,7 +42,7 @@ if [[ ${SVER} == true ]]; then
 fi
 
 # Remove Domain if detected
-if [ -n "${DOMAIN}" ]; then
+if [[ -n "${DOMAIN}" ]]; then
     if virsh dominfo --domain "${DOMAIN}" >/dev/null 2>&1; then
         virsh destroy --domain "${DOMAIN}"
         virsh undefine --domain "${DOMAIN}" --remove-all-storage

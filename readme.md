@@ -19,9 +19,6 @@ sudo ./launch-vm.sh  -d centos8 -c 2 -m 2048 -s 32 -n CentOS-8
 ```bash
 - virt-resize --expand /dev/sda1 centos8-org.img centos8.img
 - virt-filesystems --long -h --all -a centos8.img
-- virsh destroy --domain $VMNAME
-- virsh shutdown --domain $VMNAME
-- virsh undefine --domain $VMNAME --remove-all-storage
 - virsh net-dhcp-leases default
 ```
 
