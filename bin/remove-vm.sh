@@ -41,7 +41,7 @@ if [[ ${SVER} == true ]]; then
     exit 0
 fi
 
-# Remove domain if detected
+# Remove Domain if detected
 if [ -n "${DOMAIN}" ]; then
     if virsh dominfo --domain "${DOMAIN}" >/dev/null 2>&1; then
         virsh destroy --domain "${DOMAIN}"
