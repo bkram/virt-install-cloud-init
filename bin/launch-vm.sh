@@ -34,13 +34,14 @@ else
 fi
 
 function usage() {
-    echo "Usage: $(basename "$0") [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file]" 2>&1
+    echo "Usage: $(basename "$0") [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file] [-q meta-data file]" 2>&1
     echo 'Deploy cloud image to local libvirt, with a cloud init configuration'
     echo '   -d     Distribution name'
     echo '   -n     VM Name'
     echo '   -c     Amount of vcpus'
     echo '   -m     Amount of memory in MB'
     echo '   -s     reSize the disk to GB'
+    echo '   -q     Meta-data cloud-init meta-data.yml'
     echo '   -t     Alternative cloud-init config.yml'
     echo '   -f     Fetch cloud image, overwrite when image already exists'
     echo '   -v     show version'
@@ -53,7 +54,7 @@ if [[ ${#} -eq 0 ]]; then
 fi
 
 # Define list of arguments expected in the input
-optstring="d:n:c:m:s:ft:vh"
+optstring="d:n:c:m:q:s:ft:vh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
@@ -80,6 +81,9 @@ while getopts ${optstring} arg; do
         ;;
     h)
         USAGE='true'
+        ;;
+    q)
+        METADATA="${OPTARG}"
         ;;
     t)
         TEMPLATE="${OPTARG}"
@@ -115,7 +119,7 @@ source-image() {
         wget "${URL}" -O "${LVCLOUD}/${SOURCE}"
     fi
     if [ ! -e "${LVCLOUD}/${SOURCE}" ]; then
-        echo Source image "${SOURCE}" not detected on disk, You can enable a download with -f
+        echo Source image "${LVCLOUD}/${SOURCE}" not detected on disk, You can enable a download with -f
         exit 1
     fi
 }
@@ -137,7 +141,23 @@ prep-seed() {
             exit 1
         fi
     fi
-    cloud-localds -v "${LVSEED}/${VMNAME}.iso" "${LVTEMPLATES}/${TEMPLATE}"
+    if [ ! -e "${LVTEMPLATES}/${TEMPLATE}" ]; then
+        echo Template ${TEMPLATE} not detected on disk.
+        exit 1
+    fi
+    if [[ -z "${METADATA}" ]]; then
+        TEMPLATE=meta-data.yml
+    else
+        if [ ! -e "${LVTEMPLATES}/${METADATA}" ]; then
+            echo Meta data ${METADATA} not detected on disk.
+            exit 1
+        fi
+    fi
+    if [ ! -e "${LVTEMPLATES}/${METADATA}" ]; then
+        echo Meta data ${METADATA} not detected on disk.
+        exit 1
+    fi
+    cloud-localds -v "${LVSEED}/${VMNAME}.iso" "${LVTEMPLATES}/${TEMPLATE}" "${LVTEMPLATES}/${METADATA}"
 }
 
 vm-setup() {
