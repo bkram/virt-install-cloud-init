@@ -1,8 +1,7 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
-VER="1.2.0 (20201124)"
-
+VER="1.2.1 (2022041)"
 # shellcheck disable=SC2046
 SCRIPTHOME="$(dirname $(dirname $(realpath "$0")))"
 
@@ -54,7 +53,7 @@ if [[ ${#} -eq 0 ]]; then
 fi
 
 # Define list of arguments expected in the input
-optstring="d:n:c:m:q:s:ft:vh"
+optstring="d:n:c:m:s:ft:vh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
@@ -81,9 +80,6 @@ while getopts ${optstring} arg; do
         ;;
     h)
         USAGE='true'
-        ;;
-    q)
-        METADATA="${OPTARG}"
         ;;
     t)
         TEMPLATE="${OPTARG}"
@@ -115,6 +111,7 @@ else
 fi
 
 source-image() {
+    echo "${LVCLOUD}/${SOURCE}"
     if [[ ${FETCH} == true ]]; then
         wget "${URL}" -O "${LVCLOUD}/${SOURCE}"
     fi
@@ -145,19 +142,8 @@ prep-seed() {
         echo Template ${TEMPLATE} not detected on disk.
         exit 1
     fi
-    if [[ -z "${METADATA}" ]]; then
-        TEMPLATE=meta-data.yml
-    else
-        if [ ! -e "${LVTEMPLATES}/${METADATA}" ]; then
-            echo Meta data ${METADATA} not detected on disk.
-            exit 1
-        fi
-    fi
-    if [ ! -e "${LVTEMPLATES}/${METADATA}" ]; then
-        echo Meta data ${METADATA} not detected on disk.
-        exit 1
-    fi
-    cloud-localds -v "${LVSEED}/${VMNAME}.iso" "${LVTEMPLATES}/${TEMPLATE}" "${LVTEMPLATES}/${METADATA}"
+    cloud-localds -v "${LVSEED}/${VMNAME}.iso" "${LVTEMPLATES}/${TEMPLATE}"
+
 }
 
 vm-setup() {
