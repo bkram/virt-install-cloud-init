@@ -1,7 +1,7 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Remove libvirt Domain and all of its attachd storage
-VER="1.0 (20201130)"
+VER="1.1 (20220421)"
 
 function usage() {
     echo "Usage: $(basename "$0") [-d domain]" 2>&1
@@ -10,6 +10,14 @@ function usage() {
     echo '   -v     show version'
     exit 1
 }
+
+verify-sudo() {
+    if [ "$UID" -ne "0" ]; then
+        echo "Use sudo to run this command."
+        exit 1
+    fi
+}
+
 
 # Define list of arguments expected in the input
 optstring="d:v"
@@ -40,6 +48,8 @@ if [[ ${SVER} == true ]]; then
     echo "${0} version: ${VER}"
     exit 0
 fi
+
+verify-sudo
 
 # Remove Domain if detected
 if [[ -n "${DOMAIN}" ]]; then
