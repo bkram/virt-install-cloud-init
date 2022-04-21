@@ -2,6 +2,7 @@
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
 VER="1.2.1 (2022041)"
+
 # shellcheck disable=SC2046
 SCRIPTHOME="$(dirname $(dirname $(realpath "$0")))"
 
@@ -33,14 +34,13 @@ else
 fi
 
 function usage() {
-    echo "Usage: $(basename "$0") [-d distribution] [-n name] [-f] [-c vcpu] [-m memory] [-s disk] [-S disksize] [-t cloudinit file] [-q meta-data file]" 2>&1
+    echo "Usage: $(basename "$0") [-d distribution] [-n VM name] [-f] [-c vcpu] [-m memory] [-s disksize] [-t cloudinit file] [-q meta-data file]" 2>&1
     echo 'Deploy cloud image to local libvirt, with a cloud init configuration'
     echo '   -d     Distribution name'
     echo '   -n     VM Name'
     echo '   -c     Amount of vcpus'
     echo '   -m     Amount of memory in MB'
     echo '   -s     reSize the disk to GB'
-    echo '   -q     Meta-data cloud-init meta-data.yml'
     echo '   -t     Alternative cloud-init config.yml'
     echo '   -f     Fetch cloud image, overwrite when image already exists'
     echo '   -v     show version'
@@ -110,13 +110,44 @@ else
     exit 1
 fi
 
+verify-sudo() {
+    if [ "$UID" -ne "0" ]; then
+        echo "Use sudo to run this command."
+        exit 1
+    fi
+}
+
+verify-commands() {
+    for command in virsh virt-install cloud-localds qemu-img wget xmllint; do
+        if ! which ${command} >/dev/null; then
+            echo "Missing command '${command}', please install command and try again."
+            exit 1
+        fi
+    done
+}
+
+verify-folders() {
+    for folder in "${LVCLOUD}" "${LVVMS}" "${LVSEED}"; do
+        if [ ! -d "${folder}" ]; then
+            echo "Directory '${folder}' is missing, please create it and try again."
+            exit 1
+        fi
+    done
+}
+
+verify-exist() {
+    if virsh dominfo --domain "${VMNAME}" >/dev/null 2>&1; then
+        echo "Error the VM '${VMNAME}' already exists."
+        exit 1
+    fi
+}
+
 source-image() {
-    echo "${LVCLOUD}/${SOURCE}"
-    if [[ ${FETCH} == true ]]; then
+    if [[ "${FETCH}" == "true" ]]; then
         wget "${URL}" -O "${LVCLOUD}/${SOURCE}"
     fi
     if [ ! -e "${LVCLOUD}/${SOURCE}" ]; then
-        echo Source image "${LVCLOUD}/${SOURCE}" not detected on disk, You can enable a download with -f
+        echo "Source image '${LVCLOUD}/${SOURCE}' not detected on disk, You can force a download with -f"
         exit 1
     fi
 }
@@ -162,13 +193,25 @@ vm-setup() {
         --video none \
         --graphics none
 
-    virsh detach-disk --domain "${VMNAME}" "$(virsh dumpxml --domain "$VMNAME" | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --persistent --config
+    virsh detach-disk --domain "${VMNAME}" "$(virsh dumpxml --domain "${VMNAME}" | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --persistent --config
     rm "${LVSEED}/${VMNAME}.iso"
     virsh start --domain "${VMNAME}"
-    sleep 30
+    echo "Waiting for VM to start in order to retrieve ip address (domifaddr)"
+    sleep 10
     virsh domifaddr --domain "${VMNAME}"
 }
 
+verify-exist() {
+    if virsh dominfo --domain "${VMNAME}" >/dev/null 2>&1; then
+        echo "Error the VM '${VMNAME}' already exists."
+        exit 1
+    fi
+}
+
+verify-sudo
+verify-commands
+verify-folders
+verify-exist
 source-image
 prep-disk
 prep-seed
