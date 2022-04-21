@@ -165,6 +165,7 @@ vm-setup() {
     virsh detach-disk --domain "${VMNAME}" "$(virsh dumpxml --domain "$VMNAME" | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --persistent --config
     rm "${LVSEED}/${VMNAME}.iso"
     virsh start --domain "${VMNAME}"
+    sleep 30
     virsh domifaddr --domain "${VMNAME}"
 }
 
