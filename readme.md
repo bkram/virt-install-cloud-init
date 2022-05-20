@@ -2,7 +2,7 @@
 
 ## What is this all about
 
-It is a collection of bashs script easily setup and destroy cloud init enabled virtual machines locally.
+It is a collection of bash script easily setup and destroy cloud-init enabled virtual machines locally.
 
 Actively being used on:
 
@@ -15,12 +15,21 @@ Actively being used on:
 
 ## Configuration
 
-@TODO
+In the templates directory
+
+```bash
+cp cloud-config.yml-example cloud-config.yml
+cp launch-vm.ini-example launch-vm.ini
+```
+
+Modify the launch-vm.ini to match your libvirtd settings.
+
+Modify the cloud-config.yml to include your username password and ssh pubkey
 
 ## Example of creating a new virtual machine
 
 ```bash
-sudo ./launch-vm.sh  -d centos8 -c 2 -m 2048 -s 32 -n CentOS-8
+sudo ./bin/launch-vm.sh  -d almalinux8 -c 2 -m 2048 -s 32 -n AlmaLinux8 -f
 ```
 
 ## Resolving libvirt machines locally
