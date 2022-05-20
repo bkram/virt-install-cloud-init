@@ -189,9 +189,10 @@ vm-setup() {
         --virt-type kvm \
         --import \
         --qemu-commandline='-smbios type=1,serial=ds=nocloud;h='"${VMNAME}"'.'"${DOMAIN}"'' \
-        --console "${CONSOLE}" \
+        --wait \
+        --noautoconsole \
         --video none \
-        --graphics none
+        --console "${CONSOLE}"
 
     virsh detach-disk --domain "${VMNAME}" "$(virsh dumpxml --domain "${VMNAME}" | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --persistent --config
     rm "${LVSEED}/${VMNAME}.iso"
