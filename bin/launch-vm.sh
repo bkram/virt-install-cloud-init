@@ -194,7 +194,7 @@ vm-setup() {
         --video none \
         --console "${CONSOLE}"
 
-    virsh detach-disk --domain "${VMNAME}" "$(virsh dumpxml --domain "${VMNAME}" | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --persistent --config
+    virsh change-media --domain "${VMNAME}" "$(virsh dumpxml --domain "${VMNAME}" | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --eject --force --config
     rm "${LVSEED}/${VMNAME}.iso"
     virsh start --domain "${VMNAME}"
     echo "Waiting for VM to start in order to retrieve ip address (domifaddr)"
