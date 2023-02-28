@@ -1,7 +1,7 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy cloud image to local libvirt, with a cloud init configuration
-VER="1.2.1 (2022041)"
+VER="1.3.0 (20230228)"
 
 # shellcheck disable=SC2046
 SCRIPTHOME="$(dirname $(dirname $(realpath "$0")))"
@@ -34,14 +34,15 @@ else
 fi
 
 function usage() {
-    echo "Usage: $(basename "$0") [-d distribution] [-n VM name] [-f] [-c vcpu] [-m memory] [-s disksize] [-t cloudinit file] [-q meta-data file]" 2>&1
+    echo "Usage: $(basename "$0") [-d distribution] [-n VM name] [-f] [-c vcpu] [-m memory] [-s disksize] [-t cloudinit file] [-e network-config-v1 file]" 2>&1
     echo 'Deploy cloud image to local libvirt, with a cloud init configuration'
     echo '   -d     Distribution name'
     echo '   -n     VM Name'
     echo '   -c     Amount of vcpus'
     echo '   -m     Amount of memory in MB'
     echo '   -s     reSize the disk to GB'
-    echo '   -t     Alternative cloud-init config.yml'
+    echo '   -t     Alternative cloud-init config yml'
+    echo '   -e     Cloud-init network-config-v1 yml'
     echo '   -f     Fetch cloud image, overwrite when image already exists'
     echo '   -v     show version'
     exit 1
@@ -53,7 +54,7 @@ if [[ ${#} -eq 0 ]]; then
 fi
 
 # Define list of arguments expected in the input
-optstring="d:n:c:m:s:ft:vh"
+optstring="d:n:c:m:s:fte:vh"
 
 while getopts ${optstring} arg; do
     case ${arg} in
@@ -84,6 +85,9 @@ while getopts ${optstring} arg; do
     t)
         TEMPLATE="${OPTARG}"
         ;;
+    e)
+        NETCONFIG="${OPTARG}"
+        ;;
     ?)
         echo "Invalid option: -${OPTARG}."
         echo
@@ -97,9 +101,8 @@ if [[ ${SVER} == true ]]; then
     exit 0
 fi
 
-if [[ ${USAGE} == true ]]; then
+if [[ ${USAGE} == true ]] || [[ -z ${VMNAME} ]]; then
     usage
-    exit 0
 fi
 
 if [ -e "${LVTEMPLATES}/${DISTRIBUTION}.ini" ]; then
@@ -135,13 +138,6 @@ verify-folders() {
     done
 }
 
-verify-exist() {
-    if virsh dominfo --domain "${VMNAME}" >/dev/null 2>&1; then
-        echo "Error the VM '${VMNAME}' already exists."
-        exit 1
-    fi
-}
-
 source-image() {
     if [[ "${FETCH}" == "true" ]]; then
         wget "${URL}" -O "${LVCLOUD}/${SOURCE}"
@@ -165,16 +161,28 @@ prep-seed() {
         TEMPLATE=cloud-config.yml
     else
         if [ ! -e "${LVTEMPLATES}/${TEMPLATE}" ]; then
-            echo Template ${TEMPLATE} not detected on disk.
+            echo Template "${TEMPLATE}" not detected on disk.
             exit 1
         fi
     fi
     if [ ! -e "${LVTEMPLATES}/${TEMPLATE}" ]; then
-        echo Template ${TEMPLATE} not detected on disk.
+        echo Template "${TEMPLATE}" not detected on disk.
         exit 1
     fi
-    cloud-localds -v "${LVSEED}/${VMNAME}.iso" "${LVTEMPLATES}/${TEMPLATE}"
 
+    if [ -n "${NETCONFIG}" ]; then
+        cloud-localds -v --network-config="${LVTEMPLATES}/${NETCONFIG}" "${LVSEED}/${VMNAME}.iso" "${LVTEMPLATES}/${TEMPLATE}"
+    else
+        cloud-localds -v "${LVSEED}/${VMNAME}.iso" "${LVTEMPLATES}/${TEMPLATE}"
+    fi
+
+}
+
+verify-exist() {
+    if virsh dominfo --domain "${VMNAME}" >/dev/null 2>&1; then
+        echo "Error the VM '${VMNAME}' already exists."
+        exit 1
+    fi
 }
 
 vm-setup() {
@@ -197,15 +205,11 @@ vm-setup() {
     virsh change-media --domain "${VMNAME}" "$(virsh dumpxml --domain "${VMNAME}" | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --eject --force --config
     rm "${LVSEED}/${VMNAME}.iso"
     virsh start --domain "${VMNAME}"
-    echo "Waiting for VM to start in order to retrieve ip address (domifaddr)"
-    sleep 10
-    virsh domifaddr --domain "${VMNAME}"
-}
 
-verify-exist() {
-    if virsh dominfo --domain "${VMNAME}" >/dev/null 2>&1; then
-        echo "Error the VM '${VMNAME}' already exists."
-        exit 1
+    if [[ "${NETWORK}" == "default" ]]; then
+        echo "Waiting for VM to start in order to retrieve ip address (domifaddr), when using default network only."
+        sleep 10
+        virsh domifaddr --domain "${VMNAME}"
     fi
 }
 
