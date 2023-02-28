@@ -181,7 +181,7 @@ prep-seed() {
 verify-exist() {
     if virsh dominfo --domain "${VMNAME}" >/dev/null 2>&1; then
         echo "Error the VM '${VMNAME}' already exists."
-        exit 1
+        exit
     fi
 }
 
