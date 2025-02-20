@@ -1,9 +1,3 @@
-images/*.img
-images/*.iso
-images/*.raw
-images/*.qcow2
 templates/cloud-config.yml
 templates/launch-vm.ini
-templates/network-config-v1.yaml
 .vscode
-

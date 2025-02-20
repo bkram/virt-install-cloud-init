@@ -1,11 +1,17 @@
 #!/bin/bash
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
-# Deploy cloud image to local libvirt, with a cloud init configuration
-VER="1.3.0 (20230228)"
+# Deploy a cloud image to local libvirt instance using ONE pool: VMPOOL
+
+VER="1.8.0 (20250219)"
+
+set -euo pipefail
 
 # shellcheck disable=SC2046
-SCRIPTHOME="$(dirname $(dirname $(realpath "$0")))"
+SCRIPTHOME="$(dirname "$(dirname "$(realpath "$0")")")"
 
+# -------------------------------------------------------------------------
+# Load config from .ini or fall back to defaults
+# -------------------------------------------------------------------------
 if [ -e "${SCRIPTHOME}/launch-vm.ini" ]; then
     # shellcheck source=/dev/null
     source "${SCRIPTHOME}/launch-vm.ini"
@@ -27,197 +33,237 @@ else
     VCPUS=2
     VMEM=2048
     LVTEMPLATES=${SCRIPTHOME}/templates
-    LVIMAGES=${SCRIPTHOME}/images
-    LVCLOUD=${LVIMAGES}
-    LVVMS=${LVIMAGES}
-    LVSEED=${LVIMAGES}
+    VMPOOL=vm-pool
+    # If desired, set CONSOLE="pty,target_type=virtio" or similar
 fi
 
 function usage() {
-    echo "Usage: $(basename "$0") [-d distribution] [-n VM name] [-f] [-c vcpu] [-m memory] [-s disksize] [-t cloudinit file] [-e network-config-v1 file]" 2>&1
-    echo 'Deploy cloud image to local libvirt, with a cloud init configuration'
-    echo '   -d     Distribution name'
-    echo '   -n     VM Name'
-    echo '   -c     Amount of vcpus'
-    echo '   -m     Amount of memory in MB'
-    echo '   -s     reSize the disk to GB'
-    echo '   -t     Alternative cloud-init config yml'
-    echo '   -e     Cloud-init network-config-v1 yml'
-    echo '   -f     Fetch cloud image, overwrite when image already exists'
-    echo '   -v     show version'
+    echo "Usage: $(basename "$0") [options]"
+    echo "Deploy a cloud image to local libvirt using a single pool (VMPOOL)."
+    echo
+    echo "Options:"
+    echo "  -d DISTRIB   Distribution name (e.g. 'ubuntu22.04' for .ini lookup)"
+    echo "  -n NAME      VM Name"
+    echo "  -c VCPUS     Number of CPUs (default: ${VCPUS})"
+    echo "  -m MEM       Memory in MB (default: ${VMEM})"
+    echo "  -s SIZE      Resize the cloned disk to SIZE GB (optional)"
+    echo "  -f           Force a fresh download if the base volume already exists"
+    echo "  -v           Show version and exit"
+    echo
+    echo "Expects a .ini in \${LVTEMPLATES} named <DISTRIB>.ini defining:"
+    echo "  SOURCE    (e.g. 'source-ubuntu22.04.img')"
+    echo "  URL       (cloud image download URL)"
+    echo "  OSVARIANT (e.g. 'ubuntu22.04' or 'debian10')"
+    echo "  VMPOOL    (storage pool, default: vm-pool)"
+    echo
     exit 1
 }
 
-# if no input argument found, exit the script with usage
-if [[ ${#} -eq 0 ]]; then
-    usage
-fi
+# -------------------------------------------------------------------------
+# Parse arguments
+# -------------------------------------------------------------------------
+optstring="d:n:c:m:s:fvh"
 
-# Define list of arguments expected in the input
-optstring="d:n:c:m:s:fte:vh"
+FETCH=""   # We only set this if -f is passed
 
 while getopts ${optstring} arg; do
     case ${arg} in
-    d)
-        DISTRIBUTION="${OPTARG}"
-        ;;
-    n)
-        VMNAME="${OPTARG}"
-        ;;
-    c)
-        VCPUS="${OPTARG}"
-        ;;
-    m)
-        VMEM="${OPTARG}"
-        ;;
-    f)
-        FETCH='true'
-        ;;
-    s)
-        SIZE="${OPTARG}"
-        ;;
-    v)
-        SVER='true'
-        ;;
-    h)
-        USAGE='true'
-        ;;
-    t)
-        TEMPLATE="${OPTARG}"
-        ;;
-    e)
-        NETCONFIG="${OPTARG}"
-        ;;
-    ?)
-        echo "Invalid option: -${OPTARG}."
-        echo
-        usage
-        ;;
+        d)
+            DISTRIBUTION="${OPTARG}"
+            ;;
+        n)
+            VMNAME="${OPTARG}"
+            ;;
+        c)
+            VCPUS="${OPTARG}"
+            ;;
+        m)
+            VMEM="${OPTARG}"
+            ;;
+        s)
+            SIZE="${OPTARG}"
+            ;;
+        f)
+            FETCH='true'
+            ;;
+        v)
+            echo "$(basename "$0") version: ${VER}"
+            exit 0
+            ;;
+        h)
+            usage
+            ;;
+        ?)
+            echo "Invalid option: -${OPTARG}."
+            echo
+            usage
+            ;;
     esac
 done
 
-if [[ ${SVER} == true ]]; then
-    echo "${0} version: ${VER}"
-    exit 0
-fi
-
-if [[ ${USAGE} == true ]] || [[ -z ${VMNAME} ]]; then
+# If no VM name or distribution provided, exit
+if [[ -z "${VMNAME:-}" || -z "${DISTRIBUTION:-}" ]]; then
     usage
 fi
 
+# -------------------------------------------------------------------------
+# Load distribution-specific .ini (where SOURCE, URL, OSVARIANT come from)
+# -------------------------------------------------------------------------
 if [ -e "${LVTEMPLATES}/${DISTRIBUTION}.ini" ]; then
     # shellcheck source=/dev/null
     source "${LVTEMPLATES}/${DISTRIBUTION}.ini"
 else
-    echo "Distribution template ${DISTRIBUTION}.ini not found"
+    echo "Distribution template '${DISTRIBUTION}.ini' not found in ${LVTEMPLATES}"
     exit 1
 fi
 
-verify-sudo() {
-    if [ "$UID" -ne "0" ]; then
-        echo "Use sudo to run this command."
-        exit 1
-    fi
-}
-
+# -------------------------------------------------------------------------
+# Utility / Validation
+# -------------------------------------------------------------------------
 verify-commands() {
-    for command in virsh virt-install cloud-localds qemu-img wget xmllint; do
-        if ! which ${command} >/dev/null; then
-            echo "Missing command '${command}', please install command and try again."
+    for cmd in virsh virt-install wget; do
+        if ! command -v "${cmd}" >/dev/null 2>&1; then
+            echo "Missing command '${cmd}'. Please install and try again."
             exit 1
         fi
     done
 }
 
-verify-folders() {
-    for folder in "${LVCLOUD}" "${LVVMS}" "${LVSEED}"; do
-        if [ ! -d "${folder}" ]; then
-            echo "Directory '${folder}' is missing, please create it and try again."
-            exit 1
-        fi
-    done
-}
-
-source-image() {
-    if [[ "${FETCH}" == "true" ]]; then
-        wget "${URL}" -O "${LVCLOUD}/${SOURCE}"
-    fi
-    if [ ! -e "${LVCLOUD}/${SOURCE}" ]; then
-        echo "Source image '${LVCLOUD}/${SOURCE}' not detected on disk, You can force a download with -f"
+verify-pool() {
+    if ! virsh pool-info "${VMPOOL}" >/dev/null 2>&1; then
+        echo "Storage pool '${VMPOOL}' not found. Please create it or fix config."
+        echo "Example commands:"
+        echo "  virsh pool-define-as ${VMPOOL} dir - - - - /var/lib/libvirt/images/vms"
+        echo "  virsh pool-build ${VMPOOL}"
+        echo "  virsh pool-start ${VMPOOL}"
+        echo "  virsh pool-autostart ${VMPOOL}"
         exit 1
     fi
 }
 
-prep-disk() {
-    VMDISK=vm-${VMNAME}
-    cp "${LVCLOUD}/${SOURCE}" "${LVVMS}/${VMDISK}.img"
-    if [[ ${SIZE} -gt 0 ]]; then
-        qemu-img resize "${LVVMS}/${VMDISK}.img" "${SIZE}"G
-    fi
-}
-
-prep-seed() {
-    if [[ -z "${TEMPLATE}" ]]; then
-        TEMPLATE=cloud-config.yml
-    else
-        if [ ! -e "${LVTEMPLATES}/${TEMPLATE}" ]; then
-            echo Template "${TEMPLATE}" not detected on disk.
-            exit 1
-        fi
-    fi
-    if [ ! -e "${LVTEMPLATES}/${TEMPLATE}" ]; then
-        echo Template "${TEMPLATE}" not detected on disk.
-        exit 1
-    fi
-
-    if [ -n "${NETCONFIG}" ]; then
-        cloud-localds -v --network-config="${LVTEMPLATES}/${NETCONFIG}" "${LVSEED}/${VMNAME}.iso" "${LVTEMPLATES}/${TEMPLATE}"
-    else
-        cloud-localds -v "${LVSEED}/${VMNAME}.iso" "${LVTEMPLATES}/${TEMPLATE}"
-    fi
-
-}
-
-verify-exist() {
+verify-vm-not-exist() {
     if virsh dominfo --domain "${VMNAME}" >/dev/null 2>&1; then
-        echo "Error the VM '${VMNAME}' already exists."
-        exit
+        echo "Error: The VM '${VMNAME}' already exists."
+        exit 1
     fi
 }
 
+base-volume-exists() {
+    virsh vol-info --pool "${VMPOOL}" --vol "${SOURCE}" >/dev/null 2>&1
+}
+
+# Global definitions for the download
+TMP_DIR=""
+TMP_CLOUD_IMG=""
+
+# -------------------------------------------------------------------------
+# Always downloads a fresh cloud image to a temporary directory if called.
+# -------------------------------------------------------------------------
+fetch-base-file() {
+    TMP_DIR="$(mktemp -d -t cloudimg-XXXXXX)"
+    TMP_CLOUD_IMG="${TMP_DIR}/${SOURCE}"
+
+    echo >&2 "Downloading cloud image to: ${TMP_CLOUD_IMG}"
+    wget -O "${TMP_CLOUD_IMG}" "${URL}"
+
+    # Output just the path
+    echo "${TMP_CLOUD_IMG}"
+}
+
+# -------------------------------------------------------------------------
+# Create/upload the base image if it's missing, or if -f is passed remove old first
+# -------------------------------------------------------------------------
+import-base-volume() {
+    # 1) If the user wants to force a fresh download and the volume exists, remove it
+    if [[ "${FETCH}" == "true" ]] && base-volume-exists; then
+        echo "Base image '${SOURCE}' exists and '-f' was given. Deleting old volume..."
+        virsh vol-delete --pool "${VMPOOL}" --vol "${SOURCE}"
+    fi
+
+    # 2) If after that step it still exists, skip import
+    if base-volume-exists; then
+        echo "Base image '${SOURCE}' already exists in pool '${VMPOOL}'. No need to import."
+        return
+    fi
+
+    # 3) The volume doesn't exist, so let's download and import
+    local downloaded
+    downloaded=$(fetch-base-file)
+    if [[ -z "${downloaded}" ]]; then
+        echo "No file downloaded. Skipping import."
+        return
+    fi
+
+    echo "Creating volume '${SOURCE}' in pool '${VMPOOL}'..."
+    virsh vol-create-as "${VMPOOL}" "${SOURCE}" 10G --format qcow2
+
+    echo "Uploading cloud image to pool '${VMPOOL}'..."
+    virsh vol-upload --pool "${VMPOOL}" --vol "${SOURCE}" "${downloaded}"
+
+    echo "Cleaning up temporary files..."
+    rm -f "${downloaded}"
+    if [[ -n "${TMP_DIR}" && -d "${TMP_DIR}" ]]; then
+        rmdir "${TMP_DIR}"
+    fi
+}
+
+# -------------------------------------------------------------------------
+# Clone the base volume for this VM
+# -------------------------------------------------------------------------
+clone-base() {
+    VMVOL="vm-${VMNAME}.qcow2"
+
+    echo "Cloning base volume '${SOURCE}' to '${VMVOL}' in pool '${VMPOOL}'..."
+
+    if virsh vol-info --pool "${VMPOOL}" --vol "${VMVOL}" >/dev/null 2>&1; then
+        echo "Volume '${VMVOL}' already exists in '${VMPOOL}'. Aborting."
+        exit 1
+    fi
+
+    virsh vol-clone --pool "${VMPOOL}" --vol "${SOURCE}" --newname "${VMVOL}"
+}
+
+# -------------------------------------------------------------------------
+# Resize the cloned volume if requested
+# -------------------------------------------------------------------------
+resize-clone() {
+    if [[ -n "${SIZE:-}" && "${SIZE}" =~ ^[0-9]+$ && "${SIZE}" -gt 0 ]]; then
+        echo "Resizing volume '${VMVOL}' in pool '${VMPOOL}' to ${SIZE}G..."
+        virsh vol-resize --pool "${VMPOOL}" --vol "${VMVOL}" "${SIZE}G"
+    fi
+}
+
+# -------------------------------------------------------------------------
+# Install/launch the VM
+# -------------------------------------------------------------------------
 vm-setup() {
+    echo "Launching VM '${VMNAME}' with volume '${VMVOL}' in pool '${VMPOOL}'..."
+
     virt-install \
         --name "${VMNAME}" \
         --memory "${VMEM}" \
         --vcpus "${VCPUS}" \
-        --disk "${LVVMS}/${VMDISK}.img",device=disk,bus=virtio \
-        --disk "${LVSEED}/${VMNAME}.iso",device=cdrom \
+        --disk "vol=${VMPOOL}/${VMVOL},bus=virtio,format=qcow2" \
         --os-variant "${OSVARIANT}" \
-        --network network="${NETWORK}",model=virtio \
+        --network "network=${NETWORK},model=virtio" \
         --virt-type kvm \
         --import \
-        --qemu-commandline='-smbios type=1,serial=ds=nocloud;h='"${VMNAME}"'.'"${DOMAIN}"'' \
+        --cloud-init "user-data=${LVTEMPLATES}/cloud-config.yml" \
         --wait \
         --noautoconsole \
+        --console "${CONSOLE:-}" \
         --video none \
-        --console "${CONSOLE}"
-
-    virsh change-media --domain "${VMNAME}" "$(virsh dumpxml --domain "${VMNAME}" | xmllint --xpath "/domain/devices/disk/source/@file" - | cut -f 2-2 -d\" | grep -E iso\$)" --eject --force --config
-    rm "${LVSEED}/${VMNAME}.iso"
-    virsh start --domain "${VMNAME}"
-
-    if [[ "${NETWORK}" == "default" ]]; then
-        echo "Waiting for VM to start in order to retrieve ip address (domifaddr), when using default network only."
-        sleep 10
-        virsh domifaddr --domain "${VMNAME}"
-    fi
+        --qemu-commandline="-smbios type=1,serial=ds=nocloud;h=${VMNAME}.${DOMAIN}"
 }
 
-verify-sudo
+# -------------------------------------------------------------------------
+# Main Execution Flow
+# -------------------------------------------------------------------------
 verify-commands
-verify-folders
-verify-exist
-source-image
-prep-disk
-prep-seed
+verify-pool
+verify-vm-not-exist
+
+import-base-volume
+clone-base
+resize-clone
 vm-setup
