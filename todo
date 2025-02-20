@@ -1,3 +1,0 @@
-Fix linting errors with shellcheck of launch-vm.sh
-- SC2086
-- SC1090

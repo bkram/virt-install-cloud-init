@@ -11,14 +11,6 @@ function usage() {
     exit 1
 }
 
-verify-sudo() {
-    if [ "$UID" -ne "0" ]; then
-        echo "Use sudo to run this command."
-        exit 1
-    fi
-}
-
-
 # Define list of arguments expected in the input
 optstring="d:v"
 
@@ -48,8 +40,6 @@ if [[ ${SVER} == true ]]; then
     echo "${0} version: ${VER}"
     exit 0
 fi
-
-verify-sudo
 
 # Remove Domain if detected
 if [[ -n "${DOMAIN}" ]]; then
