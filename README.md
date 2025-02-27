@@ -1,50 +1,50 @@
-# virt-install-cloud
+# **virt-install-cloud**
 
-This repository provides bash scripts to easily create, deploy and destroy cloud‑init–enabled virtual machines using virt-install. It has been tested on Ubuntu 24.04 LTS (development) and works on other recent Ubuntu/Debian systems with proper libvirt configuration.
+This repository provides Bash scripts to **create, deploy, and remove cloud-init-enabled virtual machines** using `virt-install`. It has been tested on **Ubuntu 24.04 LTS** and works on other recent Ubuntu/Debian systems with a proper libvirt setup.
 
-## Required Packages (Ubuntu)
+---
 
-Install at minimum:
+## **Requirements**
+
+### **Install Required Packages (Ubuntu)**
 
 ```bash
 sudo apt update
 sudo apt install libvirt-daemon-system libvirt-clients qemu-kvm virtinst wget cloud-image-utils
 ```
 
-*(Add your user to the `libvirt` and `kvm` groups for non‑sudo usage of the scripts.)*
+For non-root usage, add your user to the `libvirt` and `kvm` groups:
 
-## Configuration
+```bash
+sudo usermod -aG libvirt,kvm $USER
+```
 
-### Provided Templates
+---
 
-The repository includes example templates in the `templates` directory:
+## **Configuration**
+
+### **Templates**
+
+Example templates are provided in the `templates` directory:
 
 - `cloud-config.yml-example`
 - `launch-vm.ini-example`
 
-To configure, copy these files:
+To set up your configuration:
 
 ```bash
 cp templates/cloud-config.yml-example templates/cloud-config.yml
 cp templates/launch-vm.ini-example templates/launch-vm.ini
 ```
 
-Then edit:
+Edit:
 
-- **`launch-vm.ini`** to match your libvirt settings (network, default memory/CPUs, storage pool name, etc.).
-- **`cloud-config.yml`** to add your username, password (if desired), and SSH public key.
+- **`launch-vm.ini`** to configure network, CPUs, RAM, storage pool, etc.
+- **`cloud-config.yml`** to define the default user, password, and SSH key.
 
-### Adding Additional Templates
+### **Adding New Distributions**
 
-To support additional distributions, create a new INI file in the `templates/` directory with a name matching the distribution (e.g., `debian12.ini`). In the new INI file, define at least the following keys:
-
-- **`SOURCE`**: The name for the base image volume (e.g., `source-debian12.img`).
-- **`URL`**: The cloud image download URL.
-- **`OSVARIANT`**: The OS variant (e.g., `debian12`).
-- **`VMPOOL`**: (Optional) The storage pool name (default is `vm-pool`).
-- **`CONSOLE`**: (Optional) Console settings (e.g., `pty,target_type=virtio`).
-
-Example `debian12.ini`:
+To support additional distributions, create an INI file in `templates/` (e.g., `debian12.ini`) with:
 
 ```ini
 SOURCE=source-debian12.img
@@ -54,9 +54,11 @@ VMPOOL=vm-pool
 CONSOLE="pty,target_type=virtio"
 ```
 
-## Storage Pool Setup
+---
 
-Our script uses a single libvirt storage pool (default: `vm-pool`) to store both base images and cloned VM disks. Create the pool on your hypervisor if it doesn’t exist:
+## **Storage Pool Setup**
+
+This script **stores base images and cloned VMs** in a libvirt storage pool (`vm-pool` by default). Create it if it doesn't exist:
 
 ```bash
 virsh pool-define-as vm-pool dir - - - - "/var/lib/libvirt/images/vms"
@@ -65,71 +67,90 @@ virsh pool-start vm-pool
 virsh pool-autostart vm-pool
 ```
 
-**Adjust the directory as needed.**
+---
 
-## Creating a New Virtual Machine
-
-Assuming you have a distribution INI (for example, `ubuntu22.04.ini`) in your `templates/` directory, run:
+## **Creating a Virtual Machine**
 
 ```bash
 ./bin/launch-vm.sh -d ubuntu22.04 -n MyUbuntuVM -c 2 -m 2048 -s 32
 ```
 
-- **`-d ubuntu22.04`** selects `templates/ubuntu22.04.ini`.
-- **`-n MyUbuntuVM`** is the new VM name.
-- **`-c 2`** sets 2 CPUs.
-- **`-m 2048`** allocates 2GB of RAM.
-- **`-s 32`** resizes the cloned disk to 32GB.
+- **`-d ubuntu22.04`** → Uses `templates/ubuntu22.04.ini`
+- **`-n MyUbuntuVM`** → VM name
+- **`-c 2`** → CPUs
+- **`-m 2048`** → Memory (MB)
+- **`-s 32`** → Disk size (GB)
 
-### Remote Hypervisor
+### **Deploying to a Remote Hypervisor**
 
-To target a remote hypervisor, export the connection URI:
+Set the `LIBVIRT_DEFAULT_URI` environment variable:
 
 ```bash
 export LIBVIRT_DEFAULT_URI="qemu+ssh://user@hypervisor/system"
 ```
 
-Make sure you have the proper user setup on the hypervisor, if not run the code below on the hypervisor.
+---
+
+## **Removing a Virtual Machine**
 
 ```bash
-sudo usermod -aG libvirt,kvm $USER
+bin/remove-vm.sh -d <VM_NAME>
 ```
 
-## Deleting a Virtual Machine
+---
 
-```bash
-bin/remove.vm -d <virtual-machine>
-```
-
-## Deleting a Base Image
-
-To force a re-download or upgrade the base image:
+## **Deleting a Base Image**
 
 ```bash
 virsh vol-delete --pool vm-pool --vol source-ubuntu22.04.img
 ```
 
-The next run of the script will download a fresh copy.
+The next VM deployment will download a fresh image.
 
-## Local Resolution of Virtual Machines
+---
 
-To resolve your locally running virtual machines by hostname on your local system:
+## **Local VM Name Resolution**
 
-1. **Install `libnss-libvirt`:**
+To resolve VM hostnames locally:
+
+1. Install `libnss-libvirt`:
 
    ```bash
    sudo apt install libnss-libvirt
    ```
 
-2. **Edit `/etc/nsswitch.conf`:**
-   Add `libvirt libvirt_guest` to the `hosts` line. For example:
+2. Edit `/etc/nsswitch.conf`, adding `libvirt libvirt_guest` to the `hosts` line:
 
-   ```text
+   ```
    hosts: files libvirt libvirt_guest dns
    ```
 
-3. Now you can ping or SSH to your VMs by their hostname (as defined in `launch-vm.ini`).
+Now you can SSH to VMs using their hostname.
 
-## Contributors
+---
 
-- **rotflol (Ronald Offerman)** for testing and contributions.
+## **Overriding Defaults**
+
+### **Use a custom `launch-vm.ini`**
+
+```bash
+export LAUNCH_VM_INI="/path/to/custom-launch-vm.ini"
+./launch-vm.sh -d ubuntu22.04 -n test-vm
+```
+
+> Uses `/path/to/custom-launch-vm.ini` instead of `templates/launch-vm.ini`.
+
+### **Use a custom cloud-init file**
+
+```bash
+export CLOUD_CONFIG="/custom/path/cloud-config.yml"
+./launch-vm.sh -d ubuntu22.04 -n test-vm
+```
+
+> Uses `/custom/path/cloud-config.yml` instead of `templates/cloud-config.yml`.
+
+---
+
+## **Contributors**
+
+- **rotflol (Ronald Offerman)** – Testing and contributions.

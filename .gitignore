@@ -1,3 +1,5 @@
 templates/cloud-config.yml
 templates/launch-vm.ini
+templates/*lab*
+templates/*local*
 .vscode
