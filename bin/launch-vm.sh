@@ -52,6 +52,7 @@ function usage() {
 optstring="d:n:c:m:s:fvh"
 
 FETCH=""
+TMP_DIR=""
 
 while getopts ${optstring} arg; do
     case ${arg} in
