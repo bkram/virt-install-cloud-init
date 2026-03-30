@@ -1,6 +1,8 @@
 # **virt-install-cloud**
 
-This repository provides Bash scripts to **create, deploy, and remove cloud-init-enabled virtual machines** using `virt-install`. It has been tested on **Ubuntu 24.04 LTS** and works on other recent Ubuntu/Debian systems with a proper libvirt setup.
+Bash scripts and templates to **create, deploy, and remove cloud-init-enabled virtual machines**
+using `virt-install`. It has been tested on **Ubuntu 24.04 LTS** and works
+on other recent Ubuntu/Debian systems with a proper libvirt setup.
 
 ---
 
