@@ -21,6 +21,12 @@ For non-root usage, add your user to the `libvirt` and `kvm` groups:
 sudo usermod -aG libvirt,kvm $USER
 ```
 
+> [!IMPORTANT]
+> The OS distro names are only as current as the version of `osinfo-db`
+> installed in your environment. If the name is not found, eg, `rocky10`,
+> then you need to edit the template file and change the OSVARIANT to
+> `unknown` in order to install the desired OS version.
+
 ---
 
 ## **Configuration**

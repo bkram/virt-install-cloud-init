@@ -201,21 +201,55 @@ vm-setup() {
         exit 1
     fi
 
-    virt-install \
+    virt-install --import \
         --name "${VMNAME}" \
         --memory "${VMEM}" \
         --vcpus "${VCPUS}" \
+        --cpu host-model \
         --disk "vol=${VMPOOL}/${VMVOL},bus=virtio,format=qcow2" \
         --os-variant "${OSVARIANT}" \
         --network "network=${NETWORK},model=virtio" \
         --virt-type kvm \
-        --import \
         --cloud-init "user-data=${CLOUD_CONFIG_FILE}" \
-        --wait \
         --noautoconsole \
         --console "${CONSOLE:-}" \
         --video none \
         --qemu-commandline="-smbios type=1,serial=ds=nocloud;h=${VMNAME}.${DOMAIN}"
+}
+
+get-vminfo() {
+    IP=${IP:-}
+    timeout=60  # seconds
+    if [[ ! -n "$IP" ]]; then
+        echo "Waiting for $VMNAME IP address..."
+        for ((i = 0; i < timeout; i++)); do
+            DOM=$(virsh -q domifaddr "$VMNAME")
+            read -ra arr <<<"$DOM"
+            if [[ -n "${arr[@]}" ]]; then
+                IP="${arr[3]%/*}"
+            fi
+
+            if [[ -n "$IP" ]]; then
+                break
+            fi
+            sleep 1
+        done
+    fi
+
+    if [[ -n "$IP" ]]; then
+        echo ""
+        echo "SSH to ${VMNAME}:"
+        echo "  ssh ${IP}"
+        echo "  ssh ubuntu@${IP}"
+        echo ""
+        echo "Checking for ${IP} in known_hosts file"
+        grep -q ${IP} ${HOME}/.ssh/known_hosts &&
+            echo "Found entry for ${IP}. Removing" &&
+            (sed --in-place "/^${IP}/d" ~/.ssh/known_hosts) ||
+            echo "No entries found for ${IP}"
+    else
+        echo "Timed out waiting for DHCP lease"
+    fi
 }
 
 # -------------------------------------------------------------------------
@@ -229,3 +263,4 @@ import-base-volume
 clone-base
 resize-clone
 vm-setup
+get-vminfo
