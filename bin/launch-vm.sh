@@ -201,6 +201,13 @@ vm-setup() {
         exit 1
     fi
 
+    META_DATA_FILE="$(mktemp -t meta-data-XXXXXX)"
+    trap 'rm -f "${META_DATA_FILE}"' EXIT
+    cat > "${META_DATA_FILE}" <<EOF
+instance-id: iid-${VMNAME}
+local-hostname: ${VMNAME}
+EOF
+
     virt-install \
         --name "${VMNAME}" \
         --memory "${VMEM}" \
@@ -210,7 +217,7 @@ vm-setup() {
         --network "network=${NETWORK},model=virtio" \
         --virt-type kvm \
         --import \
-        --cloud-init "user-data=${CLOUD_CONFIG_FILE}" \
+        --cloud-init "user-data=${CLOUD_CONFIG_FILE},meta-data=${META_DATA_FILE}" \
         --wait \
         --noautoconsole \
         --console "${CONSOLE:-}" \
