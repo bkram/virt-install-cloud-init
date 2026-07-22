@@ -1,6 +1,6 @@
 #cloud-config
 manage_etc_hosts: true
-preserv_hostname: false
+preserve_hostname: false
 timezone: Europe/Amsterdam
 package_upgrade: true
 package_update: true
@@ -12,6 +12,8 @@ runcmd:
   - echo UsePAM yes >> /etc/ssh/sshd_config
   - [systemctl, enable, sshd]
   - [systemctl, start, sshd]
+  # Show the IPv4 address at the console login prompt (agetty \4 escape).
+  - [sh, -c, "printf '%s\\n' 'IPv4 address: \\4' >> /etc/issue"]
 users:
   - name: cloud
     gecos: Cloud User
@@ -19,9 +21,11 @@ users:
     shell: /bin/bash
     groups: sudo
     lock_passwd: False
-    passwd: $6$7guwKMzfzh2tsoef$GpUVIgeFyCGigDVR2YMW6yk0hTMgCjmC3Bxt/MxnbaoGKeVKak2WU2eGDGnRO2iXfu9dk3RbAcX1Q9jP/do4d1
-    #ssh-authorized-keys:
-    #  - ssh-rsa <redacted>
+    # Example password is "cloud" — CHANGE THIS. Generate a hash with bin/gen-passwd-hash.sh
+    passwd: $6$clexample00$9Gf6jvaFDj8HhEhmV6aVZzYRHJg4aw6PRNlmmG/cnPsmeXe8zRc2hHAWzUVpGsCCh2.HsPOS4rndcQY4VUkIo.
+    ssh-authorized-keys:
+      # Replace with your own public key (ssh-ed25519 / ssh-rsa ...)
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLEEXAMPLE00 cloud@example.com
 power_state:
   mode: poweroff
   timeout: 30

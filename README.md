@@ -1,7 +1,7 @@
 # **virt-install-cloud**
 
 Bash scripts and templates to **create, deploy, and remove cloud-init-enabled virtual machines**
-using `virt-install`. It has been tested on **Ubuntu 24.04 LTS** and works
+using `virt-install`. It has been tested on **Ubuntu 26.04 LTS** and works
 on other recent Ubuntu/Debian systems with a proper libvirt setup.
 
 ---
@@ -12,7 +12,7 @@ on other recent Ubuntu/Debian systems with a proper libvirt setup.
 
 ```bash
 sudo apt update
-sudo apt install libvirt-daemon-system libvirt-clients qemu-kvm virtinst wget cloud-image-utils
+sudo apt install libvirt-daemon-system libvirt-clients qemu-kvm qemu-utils virtinst wget
 ```
 
 For non-root usage, add your user to the `libvirt` and `kvm` groups:
@@ -20,6 +20,14 @@ For non-root usage, add your user to the `libvirt` and `kvm` groups:
 ```bash
 sudo usermod -aG libvirt,kvm $USER
 ```
+
+### **Required Tools (Local or Remote)**
+
+These commands must be available on the host where you run the scripts (local system or the remote hypervisor when using `LIBVIRT_DEFAULT_URI`):
+
+- `virsh`
+- `virt-install`
+- `wget`
 
 ---
 
@@ -43,6 +51,20 @@ Edit:
 
 - **`launch-vm.ini`** to configure network, CPUs, RAM, storage pool, etc.
 - **`cloud-config.yml`** to define the default user, password, and SSH key.
+
+### **Generate a password hash**
+
+Use the helper script to create a SHA-512 hash for the `passwd:` field in `cloud-config.yml`:
+
+```bash
+bin/gen-passwd-hash.sh
+```
+
+Or from stdin (raw hash only):
+
+```bash
+echo 'secret' | bin/gen-passwd-hash.sh --stdin --raw
+```
 
 ### **Adding New Distributions**
 
@@ -74,7 +96,7 @@ virsh pool-autostart vm-pool
 ## **Creating a Virtual Machine**
 
 ```bash
-./bin/launch-vm.sh -d ubuntu22.04 -n MyUbuntuVM -c 2 -m 2048 -s 32
+./bin/launch-vm.sh -d ubuntu22.04 -n MyUbuntuVM -c 2 -m 2048 -s 32 -a 50 -N isolated
 ```
 
 - **`-d ubuntu22.04`** → Uses `templates/ubuntu22.04.ini`
@@ -82,6 +104,10 @@ virsh pool-autostart vm-pool
 - **`-c 2`** → CPUs
 - **`-m 2048`** → Memory (MB)
 - **`-s 32`** → Disk size (GB)
+- **`-a 50`** → Additional data disk size (GB)
+- **`-N isolated`** → Secondary NIC attached to libvirt network `isolated`
+- **`-f`** → Force a fresh download of the base image even if it already exists
+- **`-r`** → Recreate: destroy an existing VM of the same name and its volumes, then rebuild
 
 ### **Deploying to a Remote Hypervisor**
 
@@ -111,6 +137,30 @@ The next VM deployment will download a fresh image.
 
 ---
 
+## **Inspecting VMs**
+
+### **List running VMs and their IP addresses**
+
+```bash
+bin/list-vm-ips.sh
+```
+
+Prints a table of running VMs with their state, hostname (`<name>.<DOMAIN>`), and
+DHCP-leased IP address on the primary network. VMs without a lease yet show
+`pending`.
+
+### **Diagnose networking for a VM**
+
+```bash
+bin/diagnose-vm-network.sh <vm-name> [vm-name ...]
+```
+
+Shows, per VM, how libvirt can discover its networking: domain state, whether the
+QEMU guest agent responds, the interface list (`domiflist`), guest-reported
+addresses (`domifaddr`), and matching DHCP leases on the primary network.
+
+---
+
 ## **Local VM Name Resolution**
 
 To resolve VM hostnames locally:
@@ -123,7 +173,7 @@ To resolve VM hostnames locally:
 
 2. Edit `/etc/nsswitch.conf`, adding `libvirt libvirt_guest` to the `hosts` line:
 
-   ```
+   ```txt
    hosts: files libvirt libvirt_guest dns
    ```
 
@@ -151,8 +201,20 @@ export CLOUD_CONFIG="/custom/path/cloud-config.yml"
 
 > Uses `/custom/path/cloud-config.yml` instead of `templates/cloud-config.yml`.
 
+### **Use a specific Python interpreter for `virt-install`**
+
+```bash
+export PYTHON="/usr/bin/python3.12"
+./launch-vm.sh -d ubuntu22.04 -n test-vm
+```
+
+> `virt-install` is run under `${PYTHON:-/usr/bin/python3}`. Set `PYTHON` if the
+> `python3` first on your `PATH` (e.g. a Homebrew/pyenv one) lacks the system
+> `gi`/`libvirt` bindings and fails with `ModuleNotFoundError: No module named 'gi'`.
+
 ---
 
 ## **Contributors**
 
 - **rotflol (Ronald Offerman)** – Testing and contributions.
+- **Steve Arnold**

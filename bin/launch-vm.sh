@@ -2,7 +2,7 @@
 # (c) 2020 Mark de Bruijn <mrdebruijn@gmail.com>
 # Deploy a cloud image to a libvirt-managed hypervisor
 
-VER="1.9.0 (20250227)"
+VER="1.10.0 (20260722)"
 
 set -euo pipefail
 
@@ -21,6 +21,7 @@ if [[ -n "${LAUNCH_VM_INI:-}" && -e "${LAUNCH_VM_INI}" ]]; then
     # shellcheck source=/dev/null
     source "${LAUNCH_VM_INI}"
 elif [ -e "${LVTEMPLATES}/launch-vm.ini" ]; then
+    # shellcheck source=/dev/null
     source "${LVTEMPLATES}/launch-vm.ini"
 else
     NETWORK=default
@@ -40,7 +41,10 @@ function usage() {
     echo "  -c VCPUS     Number of CPUs (default: ${VCPUS})"
     echo "  -m MEM       Memory in MB (default: ${VMEM})"
     echo "  -s SIZE      Resize the cloned disk to SIZE GB (optional)"
+    echo "  -a SIZE      Create an additional virtio disk of SIZE GB (optional)"
+    echo "  -N NETWORK   Attach a secondary virtio NIC to libvirt network NETWORK (optional)"
     echo "  -f           Force a fresh download if the base volume already exists"
+    echo "  -r           Recreate: destroy an existing VM and its volumes, then rebuild"
     echo "  -v           Show version and exit"
     echo
     exit 1
@@ -49,9 +53,10 @@ function usage() {
 # -------------------------------------------------------------------------
 # Parse arguments
 # -------------------------------------------------------------------------
-optstring="d:n:c:m:s:fvh"
+optstring="d:n:c:m:s:a:N:frvh"
 
 FETCH=""
+RECREATE=""
 TMP_DIR=""
 
 while getopts ${optstring} arg; do
@@ -71,8 +76,17 @@ while getopts ${optstring} arg; do
         s)
             SIZE="${OPTARG}"
             ;;
+        a)
+            EXTRA_SIZE="${OPTARG}"
+            ;;
+        N)
+            SECONDARY_NETWORK="${OPTARG}"
+            ;;
         f)
             FETCH='true'
+            ;;
+        r)
+            RECREATE='true'
             ;;
         v)
             echo "$(basename "$0") version: ${VER}"
@@ -125,8 +139,23 @@ verify-pool() {
 
 verify-vm-not-exist() {
     if virsh dominfo --domain "${VMNAME}" >/dev/null 2>&1; then
-        echo "Error: The VM '${VMNAME}' already exists."
-        exit 1
+        if [[ "${RECREATE}" == "true" ]]; then
+            echo "Recreate: removing existing VM '${VMNAME}'..."
+            virsh destroy --domain "${VMNAME}" >/dev/null 2>&1 || true
+            virsh undefine --domain "${VMNAME}" --nvram >/dev/null 2>&1 \
+                || virsh undefine --domain "${VMNAME}" >/dev/null 2>&1 || true
+        else
+            echo "Error: The VM '${VMNAME}' already exists."
+            exit 1
+        fi
+    fi
+}
+
+delete-volume-if-exists() {
+    local vol="$1"
+    if virsh vol-info --pool "${VMPOOL}" --vol "${vol}" >/dev/null 2>&1; then
+        echo "Recreate: deleting volume '${vol}'..."
+        virsh vol-delete --pool "${VMPOOL}" --vol "${vol}"
     fi
 }
 
@@ -179,8 +208,12 @@ clone-base() {
     VMVOL="vm-${VMNAME}.qcow2"
 
     if virsh vol-info --pool "${VMPOOL}" --vol "${VMVOL}" >/dev/null 2>&1; then
-        echo "Volume '${VMVOL}' already exists. Aborting."
-        exit 1
+        if [[ "${RECREATE}" == "true" ]]; then
+            delete-volume-if-exists "${VMVOL}"
+        else
+            echo "Volume '${VMVOL}' already exists. Aborting."
+            exit 1
+        fi
     fi
 
     virsh vol-clone --pool "${VMPOOL}" --vol "${SOURCE}" --newname "${VMVOL}"
@@ -191,6 +224,31 @@ resize-clone() {
         echo "Resizing volume '${VMVOL}' in pool '${VMPOOL}' to ${SIZE}G..."
         virsh vol-resize --pool "${VMPOOL}" --vol "${VMVOL}" "${SIZE}G"
     fi
+}
+
+create-extra-volume() {
+    if [[ -z "${EXTRA_SIZE:-}" ]]; then
+        return
+    fi
+
+    if [[ ! "${EXTRA_SIZE}" =~ ^[0-9]+$ || "${EXTRA_SIZE}" -le 0 ]]; then
+        echo "Error: Additional disk size must be a positive integer number of GB."
+        exit 1
+    fi
+
+    EXTRAVOL="vm-${VMNAME}-data.qcow2"
+
+    if virsh vol-info --pool "${VMPOOL}" --vol "${EXTRAVOL}" >/dev/null 2>&1; then
+        if [[ "${RECREATE}" == "true" ]]; then
+            delete-volume-if-exists "${EXTRAVOL}"
+        else
+            echo "Volume '${EXTRAVOL}' already exists. Aborting."
+            exit 1
+        fi
+    fi
+
+    echo "Creating additional volume '${EXTRAVOL}' in pool '${VMPOOL}' (${EXTRA_SIZE}G)..."
+    virsh vol-create-as "${VMPOOL}" "${EXTRAVOL}" "${EXTRA_SIZE}G" --format qcow2
 }
 
 vm-setup() {
@@ -208,19 +266,43 @@ instance-id: iid-${VMNAME}
 local-hostname: ${VMNAME}
 EOF
 
-    virt-install \
+    local console_arg=()
+    if [[ -n "${CONSOLE:-}" ]]; then
+        console_arg=(--console "${CONSOLE}")
+    fi
+
+    local extra_disk_arg=()
+    if [[ -n "${EXTRAVOL:-}" ]]; then
+        extra_disk_arg=(--disk "vol=${VMPOOL}/${EXTRAVOL},bus=virtio,format=qcow2")
+    fi
+
+    local secondary_network_arg=()
+    if [[ -n "${SECONDARY_NETWORK:-}" ]]; then
+        secondary_network_arg=(--network "network=${SECONDARY_NETWORK},model=virtio")
+    fi
+
+    local virt_install_bin
+    virt_install_bin="$(command -v virt-install)"
+    if [[ -z "${virt_install_bin}" ]]; then
+        echo "Error: virt-install not found in PATH."
+        exit 1
+    fi
+
+    "${PYTHON:-/usr/bin/python3}" "${virt_install_bin}" \
         --name "${VMNAME}" \
         --memory "${VMEM}" \
         --vcpus "${VCPUS}" \
         --disk "vol=${VMPOOL}/${VMVOL},bus=virtio,format=qcow2" \
+        "${extra_disk_arg[@]}" \
         --os-variant "${OSVARIANT}" \
         --network "network=${NETWORK},model=virtio" \
+        "${secondary_network_arg[@]}" \
         --virt-type kvm \
         --import \
         --cloud-init "user-data=${CLOUD_CONFIG_FILE},meta-data=${META_DATA_FILE}" \
         --wait \
         --noautoconsole \
-        --console "${CONSOLE:-}" \
+        "${console_arg[@]}" \
         --video none \
         --qemu-commandline="-smbios type=1,serial=ds=nocloud;h=${VMNAME}.${DOMAIN}"
 }
@@ -235,4 +317,5 @@ verify-vm-not-exist
 import-base-volume
 clone-base
 resize-clone
+create-extra-volume
 vm-setup
