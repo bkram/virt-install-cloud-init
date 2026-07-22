@@ -292,6 +292,7 @@ EOF
         --name "${VMNAME}" \
         --memory "${VMEM}" \
         --vcpus "${VCPUS}" \
+        --cpu host-model \
         --disk "vol=${VMPOOL}/${VMVOL},bus=virtio,format=qcow2" \
         "${extra_disk_arg[@]}" \
         --os-variant "${OSVARIANT}" \
