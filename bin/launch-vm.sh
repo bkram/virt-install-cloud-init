@@ -252,7 +252,12 @@ create-extra-volume() {
 }
 
 vm-setup() {
+    NET_ARG=""
     CLOUD_CONFIG_FILE="${CLOUD_CONFIG:-${LVTEMPLATES}/cloud-config.yml}"
+    NET_CONFIG_FILE="${NET_CONFIG:-${LVTEMPLATES}/network-config.yml}"
+    if [[ -f "${NET_CONFIG_FILE}" ]]; then
+        NET_ARG=",network-config=${NET_CONFIG_FILE}"
+    fi
 
     if [[ ! -f "${CLOUD_CONFIG_FILE}" ]]; then
         echo "Error: Cloud-init config file '${CLOUD_CONFIG_FILE}' not found."
@@ -301,11 +306,49 @@ EOF
         --virt-type kvm \
         --import \
         --cloud-init "user-data=${CLOUD_CONFIG_FILE},meta-data=${META_DATA_FILE}" \
-        --wait \
         --noautoconsole \
         "${console_arg[@]}" \
-        --video none \
+        --graphics=spice,port=-1,listen=localhost  \
         --qemu-commandline="-smbios type=1,serial=ds=nocloud;h=${VMNAME}.${DOMAIN}"
+}
+
+get-vminfo() {
+    IP=${IP:-}
+    if [ -f "${NET_CONFIG_FILE}" ] && [ -z "${IP}" ] ; then
+        echo "Detected NET_CONFIG_FILE in use, aborting VM IP loop."
+        exit 0
+    fi
+    timeout=60  # seconds
+    if [[ ! -n "$IP" ]]; then
+        echo "Waiting for $VMNAME IP address..."
+        for ((i = 0; i < timeout; i++)); do
+            DOM=$(virsh -q domifaddr "$VMNAME")
+            read -ra arr <<<"$DOM"
+            if [[ -n "${arr[@]}" ]]; then
+                IP="${arr[3]%/*}"
+            fi
+
+            if [[ -n "$IP" ]]; then
+                break
+            fi
+            sleep 1
+        done
+    fi
+
+    if [[ -n "$IP" ]]; then
+        echo ""
+        echo "SSH to ${VMNAME}:"
+        echo "  ssh ${IP}"
+        echo "  ssh ubuntu@${IP}"
+        echo ""
+        echo "Checking for ${IP} in known_hosts file"
+        grep -q ${IP} ${HOME}/.ssh/known_hosts &&
+            echo "Found entry for ${IP}. Removing" &&
+            (sed --in-place "/^${IP}/d" ~/.ssh/known_hosts) ||
+            echo "No entries found for ${IP}"
+    else
+        echo "Timed out waiting for DHCP lease"
+    fi
 }
 
 # -------------------------------------------------------------------------
@@ -320,3 +363,4 @@ clone-base
 resize-clone
 create-extra-volume
 vm-setup
+get-vminfo

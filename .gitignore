@@ -1,4 +1,5 @@
 templates/cloud-config.yml
+templates/network-config.yml
 templates/launch-vm.ini
 templates/*lab*
 templates/*local*
